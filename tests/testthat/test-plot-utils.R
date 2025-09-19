@@ -1,10 +1,13 @@
-test_that("lines_with_outline and abline_with_outline draw without error", {
-  tf <- tempfile(fileext = ".pdf")
-  grDevices::pdf(tf)
-  plot(0:1, 0:1, type = "n")
-  expect_silent(lines_with_outline(c(0, 1), c(0, 1), col = "black", outline_col = "grey80"))
-  expect_silent(abline_with_outline(h = 0.5, col = "red", outline_col = "grey80"))
-  grDevices::dev.off()
-  unlink(tf)
+test_that("lines_with_outline returns a ggplot object and builds", {
+  df <- tibble::tibble(x = c(0, 1), y = c(0, 1))
+  p <- lines_with_outline(df, color = "black", outline_color = "grey80")
+  expect_s3_class(p, "ggplot")
+  expect_silent(ggplot2::ggplot_build(p))
+})
+
+test_that("abline_with_outline returns a ggplot object and builds", {
+  p <- abline_with_outline(h = 0.5)
+  expect_s3_class(p, "ggplot")
+  expect_silent(ggplot2::ggplot_build(p))
 })
 
