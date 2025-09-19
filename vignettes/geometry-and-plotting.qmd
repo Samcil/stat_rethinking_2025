@@ -1,0 +1,46 @@
+---
+title: "Geometry utilities and ggplot2-based plotting"
+description: "Using geometry primitives and tidy plotting helpers in tidyrethinking"
+vignette: >
+  %\VignetteIndexEntry{Geometry utilities and ggplot2-based plotting}
+  %\VignetteEngine{quarto::html}
+  %\VignetteEncoding{UTF-8}
+format:
+  html:
+    toc: true
+    number-sections: false
+---
+
+This vignette shows how to use geometry primitives and ggplot2-based plotting helpers in tidyrethinking.
+
+## Setup
+
+```{r}
+library(tidyrethinking)
+library(dplyr)
+library(ggplot2)
+```
+
+## 1. Circles and wedges
+
+```{r}
+circ <- circle_points(center = c(0, 0), r = 1, n = 200)
+wed  <- wedge_polygon(center = c(0, 0), r = 1, theta_start = 0, theta_end = pi/3, n = 50)
+
+p <- ggplot() +
+  geom_polygon(data = wed, aes(x, y), fill = "gold", color = NA, alpha = 0.6) +
+  geom_path(data = circ,  aes(x, y), color = "black") +
+  coord_equal() + theme_minimal() +
+  labs(title = "Circle with wedge")
+p
+```
+
+## 2. Lines with outlines and reference lines
+
+```{r}
+df <- tibble::tibble(x = c(0, 1), y = c(0, 1))
+lines_with_outline(df, outline_color = "white", line_color = "black", linewidth = 1.2, outline_width = 0.8) +
+  abline_with_outline(a = 0.2, b = 0.8, xlim = c(0, 1), color = "red", outline_color = "white") +
+  theme_minimal() + labs(title = "Outlined line and abline")
+```
+
