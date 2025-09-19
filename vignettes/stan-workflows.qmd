@@ -1,0 +1,51 @@
+---
+title: "Stan workflows with tidyrethinking"
+description: "Finding, compiling, and sampling Stan models via tidy stan_helpers"
+vignette: >
+  %\VignetteIndexEntry{Stan workflows with tidyrethinking}
+  %\VignetteEngine{quarto::html}
+  %\VignetteEncoding{UTF-8}
+format:
+  html:
+    toc: true
+    number-sections: false
+---
+
+This vignette demonstrates a tidy workflow for Stan models using helpers in tidyrethinking.
+
+## Setup
+
+```{r}
+library(tidyrethinking)
+library(dplyr)
+```
+
+## 1. Locate an installed Stan model
+
+```{r}
+stan_model_path("08_mHMC")
+```
+
+## 2. Compile (cmdstanr)
+
+Compilation requires the cmdstanr package and a working CmdStan installation. We never install or manage CmdStan for you.
+
+```{r}
+if (rlang::is_installed("cmdstanr") && isTRUE(try(cmdstanr::cmdstan_available(error_on_NA = FALSE), silent = TRUE))) {
+  cm <- compile_stan_model("08_mHMC")
+  cm$model
+} else {
+  message("cmdstanr or CmdStan not available; skipping compile.")
+}
+```
+
+## 3. Sample and return tidy draws
+
+```{r}
+if (exists("cm")) {
+  # Supply appropriate data list for the model; using empty list as placeholder
+  draws <- sample_stan_model(cm, data = list(), chains = 2, iter_warmup = 100, iter_sampling = 100, seed = 123)
+  head(draws)
+}
+```
+
