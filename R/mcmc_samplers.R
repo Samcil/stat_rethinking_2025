@@ -28,11 +28,40 @@ NULL
 #'   and one column per parameter (named from `init` if available, otherwise
 #'   `param1`, `param2`, ...).
 #' @examples
-#' # Define a 1D standard normal target
+#' # Sequential usage (no parallel daemons set):
 #' std_norm_target <- function(data, params) {
-#'   x <- params[1]; tibble::tibble(param1 = x, neg_log_prob = 0.5 * x^2)
+#'   x <- params[1]
+#'   tibble::tibble(param1 = x, neg_log_prob = 0.5 * x^2)
 #' }
-#' draws <- metropolis_sampler(std_norm_target, data = NULL, init = 0, n_samples = 100, step = 1, chains = 2)
+#' draws <- metropolis_sampler(std_norm_target, data = NULL, init = 0,
+#'                             n_samples = 200, step = 1, chains = 2, seed = 42)
+#'
+#' # Parallel usage with purrr::in_parallel() and mirai daemons
+#' # Parallelization is optional and controlled by the user.
+#' if (FALSE) { # interactive() && rlang::is_installed("mirai") && rlang::is_installed("carrier")
+#'   # Set up 4 background processes
+#'   mirai::daemons(4)
+#'
+#'   # Run multiple sampler configurations in parallel (fresh, self-contained function)
+#'   cfg <- tibble::tibble(step = c(0.5, 1, 1.5), seed = c(1L, 2L, 3L))
+#'   runs <- purrr::pmap(
+#'     cfg,
+#'     purrr::in_parallel(
+#'       \(step, seed) metropolis_sampler(
+#'         std_norm_target, data = NULL, init = 0,
+#'         n_samples = 1000, step = step, chains = 4, seed = seed
+#'       ),
+#'       metropolis_sampler = metropolis_sampler,
+#'       std_norm_target   = std_norm_target
+#'     )
+#'   )
+#'
+#'   # Combine draws if desired
+#'   all_draws <- dplyr::bind_rows(runs, .id = "run_id")
+#'
+#'   # Clean up when done
+#'   mirai::daemons(0)
+#' }
 #' @export
 #' @importFrom tibble tibble as_tibble
 #' @importFrom dplyr mutate group_by ungroup select all_of arrange summarise n bind_rows pull filter across
@@ -108,7 +137,10 @@ metropolis_sampler <- function(target_fn, data, init, n_samples, step, chains = 
   chain_ids <- seq_len(chains)
   # Heuristic: parallelize when we have multiple chains and large per-chain work
   draws_list <- if (chains >= 2 && n_samples >= 1000) {
-    purrr::in_parallel(purrr::map(chain_ids, one_chain))
+    purrr::map(
+      chain_ids,
+      purrr::in_parallel(\(chain_id) one_chain(chain_id), one_chain = one_chain)
+    )
   } else {
     purrr::map(chain_ids, one_chain)
   }
@@ -121,7 +153,10 @@ metropolis_sampler <- function(target_fn, data, init, n_samples, step, chains = 
     -eval_target(q)
   }
   vals <- if (nrow(Q) >= 10000) {
-    purrr::in_parallel(purrr::pmap_dbl(Q, compute_lp))
+    purrr::pmap_dbl(
+      Q,
+      purrr::in_parallel(\(...) compute_lp(...), compute_lp = compute_lp)
+    )
   } else {
     purrr::pmap_dbl(Q, compute_lp)
   }
