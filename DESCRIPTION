@@ -17,7 +17,8 @@ Imports:
     tidyr,
     purrr,
     ggplot2,
-    magrittr
+    magrittr,
+    cli
 Suggests:
     animation,
     ellipse,

@@ -4,6 +4,9 @@
 #' in this package (functions that return a tibble with `neg_log_prob`). Returns
 #' a tidy tibble of draws with per-iteration acceptance flags and log-prob.
 #'
+#' Uses purrr for mapping and can parallelize multi-chain sampling and bulk
+#' target evaluations via [purrr::in_parallel()].
+#'
 #' @family mcmc
 #' @keywords internal
 NULL
@@ -31,10 +34,17 @@ NULL
 #' }
 #' draws <- metropolis_sampler(std_norm_target, data = NULL, init = 0, n_samples = 100, step = 1, chains = 2)
 #' @export
-#' @importFrom tibble tibble
-#' @importFrom stats rnorm runif var
+#' @importFrom tibble tibble as_tibble
+#' @importFrom dplyr mutate group_by ungroup select all_of arrange summarise n bind_rows pull filter across
+#' @importFrom purrr map map_dfr pmap_dbl in_parallel
+#' @importFrom cli cli_abort cli_warn
+#' @importFrom stats rnorm runif var acf
+#' @importFrom rlang sym list2
 metropolis_sampler <- function(target_fn, data, init, n_samples, step, chains = 1, seed = NULL, ...) {
-  stopifnot(is.function(target_fn), n_samples >= 1L, chains >= 1L)
+  if (!is.function(target_fn)) cli::cli_abort("`target_fn` must be a function like function(data, params, ...) returning a tibble with `neg_log_prob`.")
+  if (!is.numeric(n_samples) || length(n_samples) != 1L || n_samples < 1) cli::cli_abort("`n_samples` must be a single integer >= 1.")
+  if (!is.numeric(chains) || length(chains) != 1L || chains < 1) cli::cli_abort("`chains` must be a single integer >= 1.")
+  dots <- rlang::list2(...)
   if (!is.null(seed)) set.seed(seed)
 
   # Prepare initial states per chain
@@ -45,18 +55,27 @@ metropolis_sampler <- function(target_fn, data, init, n_samples, step, chains = 
     init_mat <- as.matrix(init)
     chains_in <- nrow(init_mat)
     d <- ncol(init_mat)
-    stopifnot(chains_in == chains)
+    if (chains_in != chains) cli::cli_abort("`chains` ({chains}) must equal number of rows in `init` ({chains_in}).")
   } else {
-    stop("init must be numeric vector or matrix/data.frame with one row per chain")
+    cli::cli_abort("`init` must be a numeric vector or a matrix/data.frame with one row per chain.")
   }
 
   # Proposal scale
   if (length(step) == 1L) step <- rep(step, d)
-  stopifnot(length(step) == d)
+  if (length(step) != d) cli::cli_abort("`step` must be length 1 or length equal to number of parameters ({d}).")
 
   param_names <- colnames(init_mat)
   if (is.null(param_names) || any(param_names == "")) {
     param_names <- paste0("param", seq_len(d))
+  }
+
+  eval_target <- function(q) {
+    # Use do.call so we can pass through dots safely
+    res <- try(do.call(target_fn, c(list(data = data, params = q), dots)), silent = TRUE)
+    if (inherits(res, "try-error")) {
+      cli::cli_abort("`target_fn` failed to evaluate on parameters. Ensure it accepts (data, params, ...) and returns a tibble with `neg_log_prob`.")
+    }
+    as.numeric(res$neg_log_prob)
   }
 
   one_chain <- function(chain_id) {
@@ -65,13 +84,13 @@ metropolis_sampler <- function(target_fn, data, init, n_samples, step, chains = 
     colnames(out) <- c("chain", "iter", "accept", param_names)
 
     # current log prob
-    U_curr <- target_fn(data, q, ...)$neg_log_prob
-    logp_curr <- -as.numeric(U_curr)
+    U_curr <- eval_target(q)
+    logp_curr <- -U_curr
 
     for (i in seq_len(n_samples)) {
       prop <- q + stats::rnorm(d, 0, step)
-      U_prop <- target_fn(data, prop, ...)$neg_log_prob
-      logp_prop <- -as.numeric(U_prop)
+      U_prop <- eval_target(prop)
+      logp_prop <- -U_prop
       acc <- as.integer(exp(logp_prop - logp_curr) > stats::runif(1))
       if (acc == 1L) {
         q <- prop
@@ -83,25 +102,30 @@ metropolis_sampler <- function(target_fn, data, init, n_samples, step, chains = 
     out$chain <- as.integer(out$chain)
     out$iter <- as.integer(out$iter)
     out$accept <- as.integer(out$accept)
-    tibble::as_tibble(out, .name_repair = "minimal") |>
-      dplyr::mutate(log_prob = dplyr::if_else(accept == 1L, NA_real_, NA_real_)) # placeholder; compute below
+    tibble::as_tibble(out, .name_repair = "minimal")
   }
 
-  draws <- purrr::map_dfr(seq_len(chains), one_chain)
-  # Recompute log_prob for all rows from stored params
-  draws <- draws |>
-    dplyr::group_by(chain) |>
-    dplyr::mutate(
-      log_prob = {
-        Q <- dplyr::across(all_of(param_names))
-        vals <- purrr::pmap_dbl(Q, function(...) {
-          q <- c(...)
-          -as.numeric(target_fn(data, q, ...)$neg_log_prob)
-        })
-        vals
-      }
-    ) |>
-    dplyr::ungroup()
+  chain_ids <- seq_len(chains)
+  # Heuristic: parallelize when we have multiple chains and large per-chain work
+  draws_list <- if (chains >= 2 && n_samples >= 1000) {
+    purrr::in_parallel(purrr::map(chain_ids, one_chain))
+  } else {
+    purrr::map(chain_ids, one_chain)
+  }
+  draws <- dplyr::bind_rows(draws_list)
+
+  # Recompute log_prob for all rows from stored params (optionally in parallel)
+  Q <- dplyr::select(draws, dplyr::all_of(param_names))
+  compute_lp <- function(...) {
+    q <- c(...)
+    -eval_target(q)
+  }
+  vals <- if (nrow(Q) >= 10000) {
+    purrr::in_parallel(purrr::pmap_dbl(Q, compute_lp))
+  } else {
+    purrr::pmap_dbl(Q, compute_lp)
+  }
+  draws$log_prob <- vals
 
   draws
 }
@@ -115,15 +139,15 @@ metropolis_sampler <- function(target_fn, data, init, n_samples, step, chains = 
 #' @param param Name of the parameter column to analyze (string).
 #' @return Numeric R-hat value.
 #' @export
-#' @importFrom stats var
 mcmc_rhat <- function(draws, param) {
-  stopifnot(is.data.frame(draws), param %in% names(draws))
+  if (!is.data.frame(draws)) cli::cli_abort("`draws` must be a data frame/tibble from metropolis_sampler().")
+  if (!param %in% names(draws)) cli::cli_abort("Parameter `{param}` not found in `draws`. Available columns include: {paste(names(draws), collapse = ", ")}.")
   dsplit <- draws |>
     dplyr::select(chain, iter, !!rlang::sym(param)) |>
     dplyr::group_by(chain) |>
     dplyr::arrange(iter, .by_group = TRUE) |>
     dplyr::summarise(mean = mean(.data[[param]]), var = stats::var(.data[[param]]), n = dplyr::n(), .groups = "drop")
-  stopifnot(length(unique(dsplit$n)) == 1L)
+  if (length(unique(dsplit$n)) != 1L) cli::cli_abort("Each chain must have the same number of draws to compute R-hat.")
   n <- dsplit$n[1]; m <- nrow(dsplit)
   B <- n * stats::var(dsplit$mean)
   W <- mean(dsplit$var)
@@ -140,9 +164,9 @@ mcmc_rhat <- function(draws, param) {
 #' @param max_lag Maximum lag to consider when estimating autocorrelation.
 #' @return Numeric ESS estimate.
 #' @export
-#' @importFrom stats acf
 mcmc_ess <- function(draws, param, max_lag = 100) {
-  stopifnot(is.data.frame(draws), param %in% names(draws))
+  if (!is.data.frame(draws)) cli::cli_abort("`draws` must be a data frame/tibble from metropolis_sampler().")
+  if (!param %in% names(draws)) cli::cli_abort("Parameter `{param}` not found in `draws`. Available columns include: {paste(names(draws), collapse = ", ")}.")
   dsplit <- draws |>
     dplyr::select(chain, iter, !!rlang::sym(param)) |>
     dplyr::group_by(chain) |>
