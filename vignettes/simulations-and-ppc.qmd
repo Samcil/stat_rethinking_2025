@@ -1,0 +1,66 @@
+---
+title: "Simulation studies and posterior predictive checking"
+description: "Simulating generative processes and posterior predictive draws with tidyrethinking"
+vignette: >
+  %\VignetteIndexEntry{Simulation studies and posterior predictive checking}
+  %\VignetteEngine{quarto::html}
+  %\VignetteEncoding{UTF-8}
+format:
+  html:
+    toc: true
+    number-sections: false
+---
+
+This vignette shows a few reusable simulation helpers: predator–prey dynamics (Lotka–Volterra), Beta–Binomial posterior predictive draws, and a simple linear DAG with post‑treatment bias.
+
+## Setup
+
+```{r}
+library(tidyrethinking)
+library(dplyr)
+library(ggplot2)
+```
+
+## 1. Predator–prey dynamics (Lotka–Volterra)
+
+```{r}
+sim <- simulate_lynx_hare(
+  n_steps = 500,
+  init    = c(10, 20),
+  theta   = c(0.5, 0.05, 0.025, 0.5),
+  dt      = 0.01
+)
+
+sim |>
+  tidyr::pivot_longer(c(L, H), names_to = "species", values_to = "abundance") |>
+  ggplot(aes(step, abundance, color = species)) +
+  geom_line(linewidth = 0.6) + theme_minimal() +
+  labs(title = "Predator–prey dynamics", x = "time step", y = "abundance")
+```
+
+## 2. Beta–Binomial posterior predictive draws
+
+```{r}
+pp <- simulate_beta_binomial(n_draws = 2000, size = 9, alpha = 7, beta = 4)
+pp |>
+  ggplot(aes(x = w)) + geom_histogram(binwidth = 1, center = 0.5, fill = "steelblue", color = "white") +
+  labs(title = "Posterior predictive counts", x = "successes", y = "frequency") + theme_minimal()
+```
+
+## 3. Linear DAG with post‑treatment bias
+
+```{r}
+d <- simulate_bad_controls_post_treatment(n = 2000, bXZ = 1, bZY = 1, seed = 1)
+GGally::ggpairs(d) # if GGally available; otherwise scatterplots:
+```
+
+```{r}
+if (rlang::is_installed("GGally")) {
+  GGally::ggpairs(d)
+} else {
+  d |>
+    tidyr::pivot_longer(everything(), names_to = "var", values_to = "val") |>
+    ggplot(aes(var, val)) + geom_violin(fill = "grey70") + theme_minimal()
+}
+```
+
