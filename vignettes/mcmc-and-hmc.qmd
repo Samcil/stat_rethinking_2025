@@ -1,0 +1,94 @@
+---
+title: "MCMC demonstrations with tidyrethinking"
+description: "Metropolis sampler, target/gradient functions, and diagnostics using tidyverse-friendly APIs"
+vignette: >
+  %\VignetteIndexEntry{MCMC demonstrations with tidyrethinking}
+  %\VignetteEngine{quarto::html}
+  %\VignetteEncoding{UTF-8}
+format:
+  html:
+    toc: true
+    number-sections: false
+---
+
+This vignette demonstrates MCMC building blocks provided by tidyrethinking: target densities, analytic gradients, a Metropolis sampler, and simple diagnostics, all with tidyverse-friendly, data-first APIs.
+
+## Setup
+
+```{r}
+library(tidyrethinking)
+library(dplyr)
+library(ggplot2)
+```
+
+## 1. Targets and gradients (Normal with unknown mean/sigma)
+
+```{r}
+dat <- tibble::tibble(y = rnorm(200, 0, 1))
+
+# Negative log posterior (energy) and gradient at a point
+U  <- normal_mu_logsigma_target(dat, c(0, 0))
+G  <- normal_mu_logsigma_gradient(dat, c(0, 0))
+U; G
+```
+
+Vectorized across parameter rows:
+
+```{r}
+params <- tibble::tibble(mu = c(-0.5, 0, 0.5), log_sigma = c(-0.2, 0, 0.2))
+normal_mu_logsigma_target(dat, params)
+```
+
+## 2. Metropolis sampler
+
+```{r}
+set.seed(1)
+draws <- metropolis_sampler(
+  target_fn   = normal_mu_logsigma_target,
+  data        = dat,
+  init        = c(0, 0),
+  n_samples   = 2000,
+  step        = c(0.05, 0.05),
+  chains      = 2
+)
+
+# Discard burn-in
+post <- dplyr::filter(draws, iter > 500)
+```
+
+Inspect the marginal for `mu`:
+
+```{r}
+post |> ggplot(aes(x = mu)) +
+  geom_histogram(bins = 40, color = "white", fill = "steelblue") +
+  theme_minimal() +
+  labs(title = "Posterior draws for mu")
+```
+
+## 3. Diagnostics (R-hat and ESS)
+
+```{r}
+rhat_mu <- mcmc_rhat(post, "mu")
+ess_mu  <- mcmc_ess(post,  "mu")
+list(rhat_mu = rhat_mu, ess_mu = ess_mu)
+```
+
+## 4. Parallel chains with purrr::in_parallel (optional)
+
+If you enable parallel processing via `mirai::daemons(n)`, mapping over chains can be parallelized internally. Parallelization is optional and controlled by the user; without daemons set, everything runs sequentially.
+
+```{r eval=FALSE}
+if (interactive() && rlang::is_installed("mirai") && rlang::is_installed("carrier")) {
+  mirai::daemons(4)
+  draws_par <- metropolis_sampler(
+    target_fn   = normal_mu_logsigma_target,
+    data        = dat,
+    init        = c(0, 0),
+    n_samples   = 5000,
+    step        = c(0.05, 0.05),
+    chains      = 4
+  )
+  mirai::daemons(0)
+}
+```
+
