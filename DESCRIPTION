@@ -1,0 +1,39 @@
+Package: tidyrethinking
+Title: Tidyverse-Friendly Utilities and Vignettes for Statistical Rethinking
+Version: 0.0.0.9000
+Authors@R: 
+    c(person(given = "Sam", family = "Oh", role = c("aut","cre"), email = "sam@example.com"))
+Description: Refactors teaching scripts into reusable, composable, pipe-friendly functions
+    with Quarto vignettes. Utilities for geometry/plotting, simulations, and MCMC
+    demonstrations aligned with tidyverse design.
+License: MIT + file LICENSE
+Encoding: UTF-8
+LazyData: true
+Depends: R (>= 3.5.0)
+Imports:
+    rethinking,
+    tibble,
+    dplyr,
+    purrr,
+    ggplot2,
+    magrittr
+Suggests:
+    animation,
+    ellipse,
+    dagitty,
+    plotrix,
+    igraph,
+    ape,
+    cmdstanr,
+    rstan,
+    splines,
+    shape,
+    geosphere,
+    sf,
+    spData,
+    gtools,
+    quarto,
+    knitr
+Roxygen: list(markdown = TRUE, roclets = c("rd", "namespace", "collate"))
+VignetteBuilder: quarto
+

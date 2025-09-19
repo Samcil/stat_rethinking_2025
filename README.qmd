@@ -1,0 +1,21 @@
+---
+title: "tidyrethinking"
+format:
+  gfm: default
+---
+
+A tidyverse-aligned refactor of Statistical Rethinking lecture scripts into reusable functions and Quarto vignettes.
+
+- Package APIs: snake_case, data-first, composable
+- Docs: roxygen2, examples, Quarto vignettes in `vignettes/`
+- Tests: testthat in `tests/`
+
+Install (development):
+
+```
+# devtools::install()
+# Or build and check locally:
+# devtools::check()
+```
+
+

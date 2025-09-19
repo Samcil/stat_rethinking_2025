@@ -1,0 +1,24 @@
+---
+title: "tidyrethinking: Overview"
+format:
+  html:
+    toc: true
+    number-sections: false
+execute:
+  echo: true
+  warning: false
+  message: false
+---
+
+Welcome to tidyrethinking. This package refactors Statistical Rethinking teaching scripts into
+reusable, tidyverse-style functions with Quarto vignettes.
+
+- Composable, pipe-friendly APIs (data-first)
+- Roxygen2 documentation and tests
+- Quarto for vignettes and site docs
+
+```{r}
+#| echo: false
+sessionInfo()
+```
+

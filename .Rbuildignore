@@ -1,0 +1,10 @@
+^README\.qmd$
+^_quarto\.yml$
+^vignettes/_site$
+^vignettes/_freeze$
+^\.lintr$
+^\.github$
+^docs$
+^pkgdown$
+^.*\.Rproj$
+^scripts/\n
