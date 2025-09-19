@@ -33,9 +33,8 @@ normal_mu_logsigma_target <- function(data,
                                       params,
                                       a = 0, b = 1,
                                       k = 0, d = 0.5) {
-  stopifnot(!is.null(data), all(c("y") %in% names(data)))
-  stopifnot(is.numeric(a), is.numeric(b), b > 0,
-            is.numeric(k), is.numeric(d), d > 0)
+  if (is.null(data) || !all(c("y") %in% names(data))) cli::cli_abort("`data` must be a data frame with column `y`.")
+  if (!is.numeric(a) || !is.numeric(b) || b <= 0 || !is.numeric(k) || !is.numeric(d) || d <= 0) cli::cli_abort("Priors must satisfy: b > 0 and d > 0.")
 
   eval_one <- function(mu, log_sigma) {
     s <- exp(log_sigma)
@@ -50,12 +49,12 @@ normal_mu_logsigma_target <- function(data,
     tibble::tibble(mu = mu, log_sigma = log_sigma,
                    neg_log_prob = eval_one(mu, log_sigma))
   } else if (is.data.frame(params)) {
-    stopifnot(all(c("mu", "log_sigma") %in% names(params)))
+    if (!all(c("mu", "log_sigma") %in% names(params))) cli::cli_abort("`params` must have columns `mu` and `log_sigma`.")
     neg_log_prob <- mapply(eval_one, params$mu, params$log_sigma)
     tibble::tibble(mu = params$mu, log_sigma = params$log_sigma,
                    neg_log_prob = as.numeric(neg_log_prob))
   } else {
-    stop("params must be numeric length-2 or data frame with mu, log_sigma")
+    cli::cli_abort("`params` must be numeric length-2 or a data frame with columns `mu`, `log_sigma`.")
   }
 }
 
@@ -74,9 +73,8 @@ normal_mu_logsigma_target <- function(data,
 normal_mu_logsigma_gradient <- function(data, params,
                                         a = 0, b = 1,
                                         k = 0, d = 0.5) {
-  stopifnot(!is.null(data), all(c("y") %in% names(data)))
-  stopifnot(is.numeric(a), is.numeric(b), b > 0,
-            is.numeric(k), is.numeric(d), d > 0)
+  if (is.null(data) || !all(c("y") %in% names(data))) cli::cli_abort("`data` must be a data frame with column `y`.")
+  if (!is.numeric(a) || !is.numeric(b) || b <= 0 || !is.numeric(k) || !is.numeric(d) || d <= 0) cli::cli_abort("Priors must satisfy: b > 0 and d > 0.")
 
   grad_one <- function(mu, log_sigma) {
     s <- exp(log_sigma)
@@ -92,12 +90,12 @@ normal_mu_logsigma_gradient <- function(data, params,
     tibble::tibble(mu = mu, log_sigma = log_sigma,
                    d_mu = unname(g["d_mu"]), d_log_sigma = unname(g["d_log_sigma"]))
   } else if (is.data.frame(params)) {
-    stopifnot(all(c("mu", "log_sigma") %in% names(params)))
+    if (!all(c("mu", "log_sigma") %in% names(params))) cli::cli_abort("`params` must have columns `mu` and `log_sigma`.")
     grads <- mapply(grad_one, params$mu, params$log_sigma)
     tibble::tibble(mu = params$mu, log_sigma = params$log_sigma,
                    d_mu = as.numeric(grads[1, ]), d_log_sigma = as.numeric(grads[2, ]))
   } else {
-    stop("params must be numeric length-2 or data frame with mu, log_sigma")
+    cli::cli_abort("`params` must be numeric length-2 or a data frame with columns `mu`, `log_sigma`.")
   }
 }
 
@@ -118,8 +116,8 @@ normal_mu_logsigma_gradient <- function(data, params,
 #' @export
 #' @importFrom stats dnorm
 normal_sum2d_target <- function(data, params, a = 0, b = 1) {
-  stopifnot(!is.null(data), all(c("y") %in% names(data)))
-  stopifnot(is.numeric(a), is.numeric(b), b > 0)
+  if (is.null(data) || !all(c("y") %in% names(data))) cli::cli_abort("`data` must be a data frame with column `y`.")
+  if (!is.numeric(a) || !is.numeric(b) || b <= 0) cli::cli_abort("Prior sd `b` must be > 0.")
 
   eval_one <- function(a1, a2) {
     mu <- a1 + a2
@@ -133,12 +131,12 @@ normal_sum2d_target <- function(data, params, a = 0, b = 1) {
     a1 <- params[1]; a2 <- params[2]
     tibble::tibble(a1 = a1, a2 = a2, neg_log_prob = eval_one(a1, a2))
   } else if (is.data.frame(params)) {
-    stopifnot(all(c("a1", "a2") %in% names(params)))
+    if (!all(c("a1", "a2") %in% names(params))) cli::cli_abort("`params` must have columns `a1` and `a2`.")
     neg_log_prob <- mapply(eval_one, params$a1, params$a2)
     tibble::tibble(a1 = params$a1, a2 = params$a2,
                    neg_log_prob = as.numeric(neg_log_prob))
   } else {
-    stop("params must be numeric length-2 or data frame with a1, a2")
+    cli::cli_abort("`params` must be numeric length-2 or a data frame with columns `a1`, `a2`.")
   }
 }
 
@@ -154,8 +152,8 @@ normal_sum2d_target <- function(data, params, a = 0, b = 1) {
 #' normal_sum2d_gradient(dat, c(0, 0))
 #' @export
 normal_sum2d_gradient <- function(data, params, a = 0, b = 1) {
-  stopifnot(!is.null(data), all(c("y") %in% names(data)))
-  stopifnot(is.numeric(a), is.numeric(b), b > 0)
+  if (is.null(data) || !all(c("y") %in% names(data))) cli::cli_abort("`data` must be a data frame with column `y`.")
+  if (!is.numeric(a) || !is.numeric(b) || b <= 0) cli::cli_abort("Prior sd `b` must be > 0.")
 
   grad_one <- function(a1, a2) {
     mu <- a1 + a2
@@ -170,12 +168,12 @@ normal_sum2d_gradient <- function(data, params, a = 0, b = 1) {
     tibble::tibble(a1 = a1, a2 = a2,
                    d_a1 = unname(g["d_a1"]), d_a2 = unname(g["d_a2"]))
   } else if (is.data.frame(params)) {
-    stopifnot(all(c("a1", "a2") %in% names(params)))
+    if (!all(c("a1", "a2") %in% names(params))) cli::cli_abort("`params` must have columns `a1` and `a2`.")
     grads <- mapply(grad_one, params$a1, params$a2)
     tibble::tibble(a1 = params$a1, a2 = params$a2,
                    d_a1 = as.numeric(grads[1, ]), d_a2 = as.numeric(grads[2, ]))
   } else {
-    stop("params must be numeric length-2 or data frame with a1, a2")
+    cli::cli_abort("`params` must be numeric length-2 or a data frame with columns `a1`, `a2`.")
   }
 }
 

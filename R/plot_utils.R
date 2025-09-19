@@ -38,10 +38,10 @@ lines_with_outline <- function(data = NULL, x = NULL, y = NULL,
                                color = "black", size = 1,
                                outline_color = "white", outline_expand = 2, ...) {
   if (is.null(data)) {
-    stopifnot(!is.null(x), !is.null(y), length(x) == length(y))
+    if (is.null(x) || is.null(y) || length(x) != length(y)) cli::cli_abort("When data is NULL, provide `x` and `y` of equal length.")
     data <- tibble::tibble(x = x, y = y)
   } else {
-    stopifnot(all(c("x", "y") %in% names(data)))
+    if (!all(c("x", "y") %in% names(data))) cli::cli_abort("`data` must have columns `x` and `y`.")
   }
   ggplot2::ggplot(data, ggplot2::aes(x = x, y = y)) +
     ggplot2::geom_path(color = outline_color, linewidth = size * outline_expand, ...) +

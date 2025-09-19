@@ -21,7 +21,7 @@ NULL
 #' polar_to_screen(c(1,2), c(0, pi/2), origin = c(1, 1))
 #' @export
 polar_to_screen <- function(dist, theta, origin = c(0, 0)) {
-  stopifnot(length(origin) == 2)
+  if (length(origin) != 2) cli::cli_abort("`origin` must be length 2: c(x0, y0).")
   x <- origin[1] + dist * cos(theta)
   y <- origin[2] + dist * sin(theta)
   tibble::tibble(x = x, y = y)
@@ -37,7 +37,7 @@ polar_to_screen <- function(dist, theta, origin = c(0, 0)) {
 #' screen_to_polar(0, 1)
 #' @export
 screen_to_polar <- function(x, y, origin = c(0, 0)) {
-  stopifnot(length(origin) == 2)
+  if (length(origin) != 2) cli::cli_abort("`origin` must be length 2: c(x0, y0).")
   dx <- x - origin[1]
   dy <- y - origin[2]
   tibble::tibble(
@@ -56,7 +56,7 @@ screen_to_polar <- function(x, y, origin = c(0, 0)) {
 #' point_on_line(c(0,1), c(0,1), p = 0.5)
 #' @export
 point_on_line <- function(x, y, p) {
-  stopifnot(length(x) == 2, length(y) == 2, length(p) == 1)
+  if (length(x) != 2 || length(y) != 2 || length(p) != 1) cli::cli_abort("`x` and `y` must be length 2; `p` must be length 1.")
   tibble::tibble(
     x = (1 - p) * x[1] + p * x[2],
     y = (1 - p) * y[1] + p * y[2]
@@ -73,8 +73,8 @@ point_on_line <- function(x, y, p) {
 #' shorten_segment(c(0, 10), c(0, 0), frac = 0.1)
 #' @export
 shorten_segment <- function(x, y, frac = 0.1) {
-  stopifnot(length(x) == 2, length(y) == 2)
-  stopifnot(is.numeric(frac), frac >= 0, frac < 0.5)
+  if (length(x) != 2 || length(y) != 2) cli::cli_abort("`x` and `y` must be length 2.")
+  if (!is.numeric(frac) || frac < 0 || frac >= 0.5) cli::cli_abort("`frac` must be numeric in [0, 0.5).")
   dx <- x[2] - x[1]
   dy <- y[2] - y[1]
   L <- sqrt(dx^2 + dy^2)
@@ -101,7 +101,8 @@ shorten_segment <- function(x, y, frac = 0.1) {
 #' @export
 circle_points <- function(radius, origin = c(0, 0), n = 100,
                           theta_start = 0, theta_end = 2 * pi) {
-  stopifnot(length(origin) == 2, n >= 2)
+  if (length(origin) != 2) cli::cli_abort("`origin` must be length 2.")
+  if (n < 2) cli::cli_abort("`n` must be >= 2.")
   theta <- seq(theta_start, theta_end, length.out = n)
   if (length(radius) == 1L) radius <- rep(radius, length(theta))
   pts <- polar_to_screen(radius, theta, origin = origin)
