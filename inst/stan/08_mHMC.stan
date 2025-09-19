@@ -24,3 +24,4 @@ model{
     }
     D ~ normal( mu , sigma );
 }
+

@@ -85,3 +85,4 @@ generated quantities {
     y2[n2] = normal_rng(f2[n2], sigma);
   }
 }
+

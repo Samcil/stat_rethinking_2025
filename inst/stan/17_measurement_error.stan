@@ -10,7 +10,7 @@ parameters{
 }
 model{
     log_sigma ~ normal(0,0.5);
-    to_vector(Ae) ~ normal(0,)
+    to_vector(Ae) ~ normal(0,1); // NOTE: original script had an incomplete statement; preserved with a plausible sd
 
     for ( i in 1:N ) {
         // mom's age
@@ -21,3 +21,4 @@ model{
 
     }//i
 }
+

@@ -105,3 +105,4 @@ generated quantities {
     M_est = merge_missing(M_missidx, to_vector(M), M_impute);
     B_est = merge_missing(B_missidx, to_vector(B), B_impute);
 }
+
