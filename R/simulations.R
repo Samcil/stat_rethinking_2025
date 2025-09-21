@@ -32,6 +32,8 @@ NULL
 #' @examples
 #' sim <- simulate_lynx_hare(n_steps = 5, init = c(10, 20),
 #'                           theta = c(0.5, 0.05, 0.025, 0.5), dt = 0.01)
+#' @seealso [simulate_beta_binomial()], [simulate_bad_controls_post_treatment()]
+#' @family simulations
 #' @export
 #' @importFrom tibble tibble
 #' @importFrom cli cli_abort
@@ -65,6 +67,8 @@ simulate_lynx_hare <- function(n_steps, init, theta, dt = 0.002) {
 #' @return A tibble with columns `draw`, `p`, and `w` (success counts).
 #' @examples
 #' pp <- simulate_beta_binomial(n_draws = 1000, size = 9, alpha = 7, beta = 4)
+#' @seealso [simulate_lynx_hare()], [simulate_bad_controls_post_treatment()]
+#' @family simulations
 #' @export
 #' @importFrom tibble tibble
 #' @importFrom stats rbeta rbinom
@@ -98,6 +102,8 @@ simulate_beta_binomial <- function(n_draws, size, alpha, beta, seed = NULL) {
 #' @return A tibble with columns `X`, `Z`, and `Y`.
 #' @examples
 #' d <- simulate_bad_controls_post_treatment(n = 1000, bXZ = 1, bZY = 1, seed = 1)
+#' @seealso [simulate_lynx_hare()], [simulate_beta_binomial()]
+#' @family simulations
 #' @export
 #' @importFrom tibble tibble
 #' @importFrom stats rnorm

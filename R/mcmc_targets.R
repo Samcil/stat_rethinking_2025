@@ -26,6 +26,8 @@ NULL
 #' @examples
 #' dat <- tibble::tibble(y = c(-1, 0, 1))
 #' normal_mu_logsigma_target(dat, c(0, 0))
+#' @seealso [normal_mu_logsigma_gradient()]
+#' @family mcmc_targets
 #' @export
 #' @importFrom tibble tibble
 #' @importFrom stats dnorm
@@ -69,6 +71,8 @@ normal_mu_logsigma_target <- function(data,
 #' @examples
 #' dat <- tibble::tibble(y = c(-1, 0, 1))
 #' normal_mu_logsigma_gradient(dat, c(0, 0))
+#' @seealso [normal_mu_logsigma_target()]
+#' @family mcmc_targets
 #' @export
 normal_mu_logsigma_gradient <- function(data, params,
                                         a = 0, b = 1,
@@ -114,6 +118,8 @@ normal_mu_logsigma_gradient <- function(data, params,
 #' @examples
 #' dat <- tibble::tibble(y = c(-1, 0, 1))
 #' normal_sum2d_target(dat, c(0, 0))
+#' @seealso [normal_sum2d_gradient()]
+#' @family mcmc_targets
 #' @export
 #' @importFrom stats dnorm
 normal_sum2d_target <- function(data, params, a = 0, b = 1) {
@@ -151,6 +157,8 @@ normal_sum2d_target <- function(data, params, a = 0, b = 1) {
 #' @examples
 #' dat <- tibble::tibble(y = c(-1, 0, 1))
 #' normal_sum2d_gradient(dat, c(0, 0))
+#' @seealso [normal_sum2d_target()]
+#' @family mcmc_targets
 #' @export
 normal_sum2d_gradient <- function(data, params, a = 0, b = 1) {
   if (is.null(data) || !all(c("y") %in% names(data))) cli::cli_abort("`data` must be a data frame with column `y`.")

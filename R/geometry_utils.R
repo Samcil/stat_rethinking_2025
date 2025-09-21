@@ -19,6 +19,8 @@ NULL
 #' @examples
 #' polar_to_screen(1, pi/2)
 #' polar_to_screen(c(1,2), c(0, pi/2), origin = c(1, 1))
+#' @seealso [screen_to_polar()], [point_polar()], [line_polar()]
+#' @family geometry_utils
 #' @export
 polar_to_screen <- function(dist, theta, origin = c(0, 0)) {
   if (length(origin) != 2) cli::cli_abort("`origin` must be length 2: c(x0, y0).")
@@ -35,6 +37,8 @@ polar_to_screen <- function(dist, theta, origin = c(0, 0)) {
 #' @return A tibble with columns `dist` and `theta` (radians).
 #' @examples
 #' screen_to_polar(0, 1)
+#' @seealso [polar_to_screen()], [point_polar()], [line_polar()]
+#' @family geometry_utils
 #' @export
 screen_to_polar <- function(x, y, origin = c(0, 0)) {
   if (length(origin) != 2) cli::cli_abort("`origin` must be length 2: c(x0, y0).")
@@ -54,6 +58,8 @@ screen_to_polar <- function(x, y, origin = c(0, 0)) {
 #' @return A tibble with columns `x`, `y` at the interpolated point.
 #' @examples
 #' point_on_line(c(0,1), c(0,1), p = 0.5)
+#' @seealso [shorten_segment()]
+#' @family geometry_utils
 #' @export
 point_on_line <- function(x, y, p) {
   if (length(x) != 2 || length(y) != 2 || length(p) != 1) cli::cli_abort("`x` and `y` must be length 2; `p` must be length 1.")
@@ -71,6 +77,8 @@ point_on_line <- function(x, y, p) {
 #' @return A tibble with columns `x`, `y` for the shortened segment endpoints (2 rows).
 #' @examples
 #' shorten_segment(c(0, 10), c(0, 0), frac = 0.1)
+#' @seealso [point_on_line()]
+#' @family geometry_utils
 #' @export
 shorten_segment <- function(x, y, frac = 0.1) {
   if (length(x) != 2 || length(y) != 2) cli::cli_abort("`x` and `y` must be length 2.")
@@ -98,6 +106,8 @@ shorten_segment <- function(x, y, frac = 0.1) {
 #' @return A tibble with columns `x`, `y`, `theta`.
 #' @examples
 #' circle_points(1, n = 4)
+#' @seealso [wedge_polygon()], [line_polar()], [point_polar()]
+#' @family geometry_utils
 #' @export
 circle_points <- function(radius, origin = c(0, 0), n = 100,
                           theta_start = 0, theta_end = 2 * pi) {
@@ -121,6 +131,8 @@ circle_points <- function(radius, origin = c(0, 0), n = 100,
 #' @return Tibble of x,y suitable for polygon drawing.
 #' @examples
 #' wedge_polygon(1, 0, pi/2)
+#' @seealso [circle_points()], [line_polar()], [point_polar()]
+#' @family geometry_utils
 #' @export
 wedge_polygon <- function(radius, theta_start, theta_end,
                           origin = c(0, 0), n = 100, include_origin = FALSE) {
@@ -144,6 +156,8 @@ wedge_polygon <- function(radius, theta_start, theta_end,
 #' @return A tibble with two rows (start and end) and columns x,y.
 #' @examples
 #' line_polar(1, pi/4)
+#' @seealso [point_polar()], [polar_to_screen()], [screen_to_polar()]
+#' @family geometry_utils
 #' @export
 line_polar <- function(radius, theta, origin = c(0, 0)) {
   end <- polar_to_screen(radius, theta, origin)
@@ -156,6 +170,8 @@ line_polar <- function(radius, theta, origin = c(0, 0)) {
 #' @return A tibble with columns x,y.
 #' @examples
 #' point_polar(2, pi)
+#' @seealso [line_polar()], [polar_to_screen()], [screen_to_polar()]
+#' @family geometry_utils
 #' @export
 point_polar <- function(radius, theta, origin = c(0, 0)) {
   polar_to_screen(radius, theta, origin)

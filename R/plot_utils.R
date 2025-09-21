@@ -32,6 +32,8 @@ NULL
 #' # From tibble with x,y columns
 #' df <- tibble::tibble(x = c(0, 1), y = c(1, 0))
 #' lines_with_outline(df, color = "steelblue")
+#' @seealso [abline_with_outline()]
+#' @family plotting
 #' @export
 #' @importFrom ggplot2 ggplot aes geom_path
 lines_with_outline <- function(data = NULL, x = NULL, y = NULL,
@@ -66,6 +68,8 @@ lines_with_outline <- function(data = NULL, x = NULL, y = NULL,
 #' @return A ggplot object with outline and inner reference line.
 #' @examples
 #' abline_with_outline(h = 0.5)
+#' @seealso [lines_with_outline()]
+#' @family plotting
 #' @export
 #' @importFrom ggplot2 ggplot geom_abline geom_hline geom_vline coord_cartesian
 abline_with_outline <- function(data = NULL, a = NULL, b = NULL,

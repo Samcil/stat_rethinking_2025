@@ -62,6 +62,8 @@ NULL
 #'   # Clean up when done
 #'   mirai::daemons(0)
 #' }
+#' @seealso [mcmc_rhat()], [mcmc_ess()] (basic diagnostics)
+#' @family mcmc
 #' @export
 #' @importFrom tibble tibble as_tibble
 #' @importFrom dplyr mutate group_by ungroup select all_of arrange summarise n bind_rows pull filter across
@@ -173,6 +175,8 @@ metropolis_sampler <- function(target_fn, data, init, n_samples, step, chains = 
 #' @param draws Tibble returned by [metropolis_sampler()].
 #' @param param Name of the parameter column to analyze (string).
 #' @return Numeric R-hat value.
+#' @seealso [metropolis_sampler()]
+#' @family mcmc
 #' @export
 mcmc_rhat <- function(draws, param) {
   if (!is.data.frame(draws)) cli::cli_abort("`draws` must be a data frame/tibble from metropolis_sampler().")
@@ -198,6 +202,8 @@ mcmc_rhat <- function(draws, param) {
 #' @inheritParams mcmc_rhat
 #' @param max_lag Maximum lag to consider when estimating autocorrelation.
 #' @return Numeric ESS estimate.
+#' @seealso [metropolis_sampler()]
+#' @family mcmc
 #' @export
 mcmc_ess <- function(draws, param, max_lag = 100) {
   if (!is.data.frame(draws)) cli::cli_abort("`draws` must be a data frame/tibble from metropolis_sampler().")

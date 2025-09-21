@@ -20,6 +20,8 @@ NULL
 #' @return A character scalar file path. Aborts if the file is not found.
 #' @examples
 #' # stan_model_path("08_mHMC")
+#' @seealso [compile_stan_model()], [sample_stan_model()]
+#' @family stan_helpers
 #' @export
 #' @importFrom cli cli_abort
 stan_model_path <- function(name) {
@@ -47,6 +49,8 @@ stan_model_path <- function(name) {
 #' if (FALSE) { # interactive() && rlang::is_installed("cmdstanr")
 #'   m <- compile_stan_model("08_mHMC")
 #' }
+#' @seealso [stan_model_path()], [sample_stan_model()]
+#' @family stan_helpers
 #' @export
 #' @importFrom cli cli_abort
 compile_stan_model <- function(name, backend = c("cmdstanr"), copy_to_temp = TRUE, ...) {
@@ -100,6 +104,8 @@ compile_stan_model <- function(name, backend = c("cmdstanr"), copy_to_temp = TRU
 #'   cm <- compile_stan_model("08_mHMC")
 #'   draws <- sample_stan_model(cm, data = list(), chains = 2, iter_warmup = 100, iter_sampling = 100)
 #' }
+#' @seealso [stan_model_path()], [compile_stan_model()]
+#' @family stan_helpers
 #' @export
 #' @importFrom tibble as_tibble
 #' @importFrom cli cli_abort
