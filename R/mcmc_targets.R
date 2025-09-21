@@ -50,9 +50,9 @@ normal_mu_logsigma_target <- function(data,
                    neg_log_prob = eval_one(mu, log_sigma))
   } else if (is.data.frame(params)) {
     if (!all(c("mu", "log_sigma") %in% names(params))) cli::cli_abort("`params` must have columns `mu` and `log_sigma`.")
-    neg_log_prob <- mapply(eval_one, params$mu, params$log_sigma)
+    neg_log_prob <- purrr::pmap_dbl(list(params$mu, params$log_sigma), ~ eval_one(..1, ..2))
     tibble::tibble(mu = params$mu, log_sigma = params$log_sigma,
-                   neg_log_prob = as.numeric(neg_log_prob))
+                   neg_log_prob = neg_log_prob)
   } else {
     cli::cli_abort("`params` must be numeric length-2 or a data frame with columns `mu`, `log_sigma`.")
   }
@@ -91,9 +91,10 @@ normal_mu_logsigma_gradient <- function(data, params,
                    d_mu = unname(g["d_mu"]), d_log_sigma = unname(g["d_log_sigma"]))
   } else if (is.data.frame(params)) {
     if (!all(c("mu", "log_sigma") %in% names(params))) cli::cli_abort("`params` must have columns `mu` and `log_sigma`.")
-    grads <- mapply(grad_one, params$mu, params$log_sigma)
+    d_mu <- purrr::pmap_dbl(list(params$mu, params$log_sigma), ~ grad_one(..1, ..2)["d_mu"])
+    d_log_sigma <- purrr::pmap_dbl(list(params$mu, params$log_sigma), ~ grad_one(..1, ..2)["d_log_sigma"])
     tibble::tibble(mu = params$mu, log_sigma = params$log_sigma,
-                   d_mu = as.numeric(grads[1, ]), d_log_sigma = as.numeric(grads[2, ]))
+                   d_mu = d_mu, d_log_sigma = d_log_sigma)
   } else {
     cli::cli_abort("`params` must be numeric length-2 or a data frame with columns `mu`, `log_sigma`.")
   }
@@ -132,9 +133,9 @@ normal_sum2d_target <- function(data, params, a = 0, b = 1) {
     tibble::tibble(a1 = a1, a2 = a2, neg_log_prob = eval_one(a1, a2))
   } else if (is.data.frame(params)) {
     if (!all(c("a1", "a2") %in% names(params))) cli::cli_abort("`params` must have columns `a1` and `a2`.")
-    neg_log_prob <- mapply(eval_one, params$a1, params$a2)
+    neg_log_prob <- purrr::pmap_dbl(list(params$a1, params$a2), ~ eval_one(..1, ..2))
     tibble::tibble(a1 = params$a1, a2 = params$a2,
-                   neg_log_prob = as.numeric(neg_log_prob))
+                   neg_log_prob = neg_log_prob)
   } else {
     cli::cli_abort("`params` must be numeric length-2 or a data frame with columns `a1`, `a2`.")
   }
@@ -169,9 +170,10 @@ normal_sum2d_gradient <- function(data, params, a = 0, b = 1) {
                    d_a1 = unname(g["d_a1"]), d_a2 = unname(g["d_a2"]))
   } else if (is.data.frame(params)) {
     if (!all(c("a1", "a2") %in% names(params))) cli::cli_abort("`params` must have columns `a1` and `a2`.")
-    grads <- mapply(grad_one, params$a1, params$a2)
+    d_a1 <- purrr::pmap_dbl(list(params$a1, params$a2), ~ grad_one(..1, ..2)["d_a1"])
+    d_a2 <- purrr::pmap_dbl(list(params$a1, params$a2), ~ grad_one(..1, ..2)["d_a2"])
     tibble::tibble(a1 = params$a1, a2 = params$a2,
-                   d_a1 = as.numeric(grads[1, ]), d_a2 = as.numeric(grads[2, ]))
+                   d_a1 = d_a1, d_a2 = d_a2)
   } else {
     cli::cli_abort("`params` must be numeric length-2 or a data frame with columns `a1`, `a2`.")
   }

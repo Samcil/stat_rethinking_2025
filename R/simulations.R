@@ -41,13 +41,15 @@ simulate_lynx_hare <- function(n_steps, init, theta, dt = 0.002) {
   if (!is.numeric(theta) || length(theta) != 4L) cli::cli_abort("`theta` must be numeric length 4: c(rH, aHL, aLH, mL).")
   if (!is.numeric(dt) || length(dt) != 1L || dt <= 0) cli::cli_abort("`dt` must be a single positive number.")
 
-  L <- numeric(n_steps); H <- numeric(n_steps)
-  L[1] <- init[1]; H[1] <- init[2]
-  for (i in seq_len(n_steps - 1L)) {
-    H[i + 1L] <- H[i] + dt * H[i] * (theta[1] - theta[2] * L[i])
-    L[i + 1L] <- L[i] + dt * L[i] * (theta[3] * H[i] - theta[4])
-  }
-  tibble::tibble(step = seq_len(n_steps), L = L, H = H)
+  state0 <- c(L = init[1], H = init[2])
+  states <- purrr::accumulate(seq_len(n_steps - 1L), function(prev, i) {
+    L <- prev[["L"]]; H <- prev[["H"]]
+    Hn <- H + dt * H * (theta[1] - theta[2] * L)
+    Ln <- L + dt * L * (theta[3] * H - theta[4])
+    c(L = Ln, H = Hn)
+  }, .init = state0)
+  mat <- do.call(rbind, states)
+  tibble::tibble(step = seq_len(n_steps), L = as.numeric(mat[, "L"]), H = as.numeric(mat[, "H"]))
 }
 
 #' Beta–Binomial posterior predictive draws
