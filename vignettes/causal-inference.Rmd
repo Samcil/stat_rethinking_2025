@@ -1,0 +1,463 @@
+---
+title: "Causal Inference with DAGs"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Causal Inference with DAGs}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 8,
+  fig.height = 6
+)
+```
+
+## Introduction
+
+Causal inference requires careful thinking about which variables to condition on. This vignette demonstrates how to use **tidyrethinking** for:
+
+- Creating and visualizing DAGs
+- Simulating confounding, colliders, and mediation
+- Understanding bias patterns
+- Identifying valid adjustment sets
+
+```{r setup}
+library(tidyrethinking)
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+```
+
+## DAG Fundamentals
+
+### Creating DAG Layouts
+
+tidyrethinking provides flexible DAG visualization tools:
+
+```{r dag-layouts}
+# Define nodes
+nodes <- c("Z", "X", "Y")
+
+# Horizontal layout (left to right)
+horizontal <- create_dag_positions(nodes, layout = "horizontal")
+
+# Vertical layout (top to bottom)
+vertical <- create_dag_positions(nodes, layout = "vertical")
+
+# Circular layout
+circular <- create_dag_positions(nodes, layout = "circular")
+
+# Custom positions
+custom <- create_dag_positions(
+  nodes,
+  layout = "custom",
+  positions = list(Z = c(0, 1), X = c(0, 0), Y = c(1, 0))
+)
+
+head(horizontal)
+```
+
+### Drawing DAGs
+
+```{r dag-draw}
+# Define a confounding structure: Z -> X, Z -> Y
+dag_nodes <- create_dag_positions(
+  nodes = c("Z", "X", "Y"),
+  layout = "custom",
+  positions = list(
+    Z = c(0.5, 1),    # Confounder at top
+    X = c(0, 0),      # Treatment at left
+    Y = c(1, 0)       # Outcome at right
+  )
+)
+
+# Create edges
+dag_edges <- create_dag_edges(
+  from = c("Z", "Z", "X"),
+  to = c("X", "Y", "Y"),
+  positions = dag_nodes
+)
+
+# Visualize
+ggplot() +
+  geom_segment(
+    data = dag_edges,
+    aes(x = x_start, y = y_start, xend = x_end, yend = y_end),
+    arrow = arrow(length = unit(0.3, "cm"), type = "closed"),
+    linewidth = 1,
+    color = "steelblue"
+  ) +
+  geom_point(
+    data = dag_nodes,
+    aes(x = x, y = y),
+    size = 20,
+    color = "white",
+    fill = "steelblue",
+    shape = 21,
+    stroke = 2
+  ) +
+  geom_text(
+    data = dag_nodes,
+    aes(x = x, y = y, label = node),
+    size = 6,
+    fontface = "bold"
+  ) +
+  coord_fixed(ratio = 1, xlim = c(-0.2, 1.2), ylim = c(-0.2, 1.2)) +
+  theme_void() +
+  labs(title = "Confounding Structure")
+```
+
+## Confounding
+
+### Understanding the Bias
+
+Confounding occurs when a common cause affects both treatment and outcome:
+
+```{r confound-sim}
+# Simulate confounded data
+confounded <- simulate_confounding(
+  n = 1000,
+  effect_z_x = 1.0,   # Z influences X
+  effect_z_y = 1.5,   # Z influences Y
+  effect_x_y = 0.5,   # True causal effect
+  seed = 42
+)
+
+head(confounded)
+```
+
+### Naive Analysis (Biased)
+
+```{r confound-naive}
+# Regression without controlling for confounder
+naive_fit <- lm(y ~ x, data = confounded)
+coef(naive_fit)["x"]  # Biased estimate
+
+# The naive estimate conflates the true effect (0.5) 
+# with the backdoor path through Z
+```
+
+### Correct Analysis
+
+```{r confound-adjust}
+# Regression controlling for confounder
+adjusted_fit <- lm(y ~ x + z, data = confounded)
+coef(adjusted_fit)["x"]  # Unbiased estimate ≈ 0.5
+
+# Blocking the backdoor path recovers true effect
+```
+
+### Visualizing the Bias
+
+```{r confound-viz}
+# Create bins of confounder Z
+confounded_binned <- confounded %>%
+  mutate(z_bin = cut(z, breaks = 5))
+
+# Plot relationship within Z bins
+ggplot(confounded_binned, aes(x = x, y = y)) +
+  geom_point(aes(color = z_bin), alpha = 0.4) +
+  geom_smooth(aes(group = z_bin, color = z_bin), 
+              method = "lm", se = FALSE, linewidth = 1) +
+  geom_smooth(method = "lm", color = "black", linewidth = 1.5, 
+              linetype = "dashed") +
+  scale_color_viridis_d() +
+  labs(
+    x = "Treatment (X)",
+    y = "Outcome (Y)",
+    color = "Confounder\n(Z) bin",
+    title = "Confounding Creates Spurious Association",
+    subtitle = "Dashed line = naive estimate (biased)\nColored lines = within-Z slopes (unbiased)"
+  ) +
+  theme_rethinking()
+```
+
+## Collider Bias
+
+### Understanding Selection Bias
+
+A collider is a variable caused by both treatment and outcome. Conditioning on a collider creates spurious association:
+
+```{r collider-sim}
+# Simulate collider structure: X -> C <- Y
+collider_data <- simulate_collider_bias(
+  n = 1000,
+  effect_x_c = 1.0,   # X causes C
+  effect_y_c = 1.0,   # Y causes C
+  effect_x_y = 0.0,   # No true effect!
+  seed = 42
+)
+
+head(collider_data)
+```
+
+### Unconditional Analysis (Correct)
+
+```{r collider-correct}
+# X and Y are independent
+cor(collider_data$x, collider_data$y)
+
+# Regression without collider
+unconditioned <- lm(y ~ x, data = collider_data)
+coef(unconditioned)["x"]  # ≈ 0 (correct)
+```
+
+### Conditioned Analysis (Biased!)
+
+```{r collider-biased}
+# Condition on collider (selection bias)
+conditioned <- lm(y ~ x + c, data = collider_data)
+coef(conditioned)["x"]  # Non-zero (spurious!)
+
+# Within-collider analysis
+collider_subset <- collider_data %>%
+  filter(c > quantile(c, 0.75))  # Select high C
+
+cor(collider_subset$x, collider_subset$y)  # Spurious correlation!
+```
+
+### Visualizing Collider Bias
+
+```{r collider-viz}
+# Mark selection based on collider
+collider_data <- collider_data %>%
+  mutate(selected = c > quantile(c, 0.5))
+
+ggplot(collider_data, aes(x = x, y = y)) +
+  geom_point(aes(color = selected, alpha = selected), size = 2) +
+  geom_smooth(
+    data = filter(collider_data, selected),
+    method = "lm",
+    color = "red",
+    linewidth = 1.5
+  ) +
+  geom_smooth(
+    method = "lm",
+    color = "black",
+    linetype = "dashed",
+    linewidth = 1.5
+  ) +
+  scale_color_manual(values = c("grey70", "coral")) +
+  scale_alpha_manual(values = c(0.3, 0.8)) +
+  labs(
+    x = "X (independent of Y)",
+    y = "Y (independent of X)",
+    color = "Selected\n(high C)",
+    alpha = "Selected\n(high C)",
+    title = "Collider Bias Creates Spurious Negative Association",
+    subtitle = "Red = selected sample (biased), Dashed = full sample (unbiased)"
+  ) +
+  theme_rethinking()
+```
+
+## Post-Treatment Bias (Mediation)
+
+### Understanding Mediation
+
+Post-treatment variables are caused by treatment and cause the outcome. Conditioning blocks the causal effect:
+
+```{r mediation-sim}
+# Simulate mediation: X -> M -> Y
+mediation_data <- simulate_post_treatment_bias(
+  n = 1000,
+  effect_x_m = 0.7,   # X causes mediator M
+  effect_m_y = 0.8,   # M causes Y
+  direct_effect = 0.2,  # Direct X -> Y
+  seed = 42
+)
+
+# Total effect = direct + indirect = 0.2 + (0.7 * 0.8) = 0.76
+head(mediation_data)
+```
+
+### Total Effect (Correct for Total Causal Effect)
+
+```{r mediation-total}
+# Don't condition on mediator
+total_effect <- lm(y ~ x, data = mediation_data)
+coef(total_effect)["x"]  # ≈ 0.76 (total effect)
+```
+
+### Direct Effect Only
+
+```{r mediation-direct}
+# Condition on mediator to block indirect path
+direct_effect <- lm(y ~ x + m, data = mediation_data)
+coef(direct_effect)["x"]  # ≈ 0.2 (direct only)
+coef(direct_effect)["m"]  # ≈ 0.8 (mediator effect)
+```
+
+### Mediation Analysis
+
+```{r mediation-decompose}
+# Calculate indirect effect
+total_est <- coef(total_effect)["x"]
+direct_est <- coef(direct_effect)["x"]
+indirect_est <- total_est - direct_est
+
+tibble(
+  Effect = c("Total", "Direct", "Indirect", "Proportion mediated"),
+  Estimate = c(
+    total_est,
+    direct_est,
+    indirect_est,
+    indirect_est / total_est
+  )
+)
+```
+
+### Visualizing Mediation
+
+```{r mediation-viz}
+# Create data for path visualization
+mediation_paths <- tibble(
+  path = c("X -> M -> Y", "X -> Y"),
+  effect = c(indirect_est, direct_est),
+  type = c("Indirect", "Direct")
+)
+
+ggplot(mediation_paths, aes(x = path, y = effect, fill = type)) +
+  geom_col(width = 0.6) +
+  scale_fill_manual(values = c("Direct" = "steelblue", "Indirect" = "coral")) +
+  labs(
+    x = "Causal Path",
+    y = "Effect Size",
+    fill = "Effect Type",
+    title = "Decomposing Total Causal Effect into Direct and Indirect",
+    subtitle = sprintf("Total effect = %.2f (Direct: %.2f + Indirect: %.2f)",
+                      total_est, direct_est, indirect_est)
+  ) +
+  theme_rethinking()
+```
+
+## Practical Guidelines
+
+### 1. Draw Your DAG First
+
+```{r guidelines-dag, eval=FALSE}
+# Before analysis, explicitly state your causal assumptions
+nodes <- c("Treatment", "Outcome", "Confounder", "Mediator", "Collider")
+
+positions <- create_dag_positions(
+  nodes,
+  layout = "custom",
+  positions = list(...)
+)
+
+edges <- create_dag_edges(
+  from = c("Confounder", "Confounder", "Treatment", ...),
+  to = c("Treatment", "Outcome", "Mediator", ...),
+  positions = positions
+)
+
+# Visualize and discuss with collaborators
+```
+
+### 2. Simulate to Understand
+
+```{r guidelines-sim, eval=FALSE}
+# Generate data matching your DAG
+sim_data <- simulate_confounding(n = 10000, ...)
+
+# Try different analysis strategies
+lm(outcome ~ treatment)                    # Biased?
+lm(outcome ~ treatment + confounder)       # Unbiased?
+lm(outcome ~ treatment + collider)         # Biased in other direction?
+
+# Compare estimates to known truth
+```
+
+### 3. Test for Selection Bias
+
+```{r guidelines-select, eval=FALSE}
+# If you suspect collider bias:
+full_data <- simulate_collider_bias(n = 1000)
+selected_data <- full_data %>% filter(collider > threshold)
+
+# Compare estimates
+lm(y ~ x, data = full_data)      # Should be ≈ 0
+lm(y ~ x, data = selected_data)  # Biased if collider
+```
+
+### 4. Identify Adjustment Sets
+
+Rules of thumb:
+- **Control for confounders**: Common causes of treatment and outcome
+- **Don't control for colliders**: Common effects of treatment and outcome
+- **Don't control for mediators**: Unless you want only direct effect
+- **Control for pre-treatment variables**: Not post-treatment
+
+## Complex DAGs
+
+### Multiple Confounders
+
+```{r complex-multiple}
+# More realistic scenario
+nodes <- c("Z1", "Z2", "X", "Y")
+positions <- create_dag_positions(
+  nodes,
+  layout = "custom",
+  positions = list(
+    Z1 = c(0, 1),
+    Z2 = c(1, 1),
+    X = c(0.5, 0.5),
+    Y = c(0.5, 0)
+  )
+)
+
+# Z1 -> X, Z1 -> Y, Z2 -> X, Z2 -> Y, X -> Y
+edges <- create_dag_edges(
+  from = c("Z1", "Z1", "Z2", "Z2", "X"),
+  to = c("X", "Y", "X", "Y", "Y"),
+  positions = positions
+)
+
+# Need to adjust for both Z1 and Z2
+```
+
+### M-Bias
+
+```{r complex-mbias}
+# Spurious path through unobserved confounder
+# U1 -> C <- U2, U1 -> X, U2 -> Y
+# Controlling for C opens backdoor path!
+
+nodes <- c("U1", "U2", "C", "X", "Y")
+positions <- create_dag_positions(
+  nodes,
+  layout = "custom",
+  positions = list(
+    U1 = c(0, 1),
+    U2 = c(1, 1),
+    C = c(0.5, 0.8),
+    X = c(0, 0),
+    Y = c(1, 0)
+  )
+)
+
+edges <- create_dag_edges(
+  from = c("U1", "U2", "U1", "U2", "X"),
+  to = c("C", "C", "X", "Y", "Y"),
+  positions = positions
+)
+
+# Don't adjust for C even though it's correlated with both X and Y!
+```
+
+## Resources
+
+- Pearl, J. (2009). *Causality: Models, Reasoning, and Inference*
+- Hernán & Robins (2020). *Causal Inference: What If*
+- McElreath, R. (2020). *Statistical Rethinking*, Chapters 5-6
+- **dagitty**: <http://dagitty.net/> for identifying adjustment sets
+- **ggdag**: <https://ggdag.malco.io/> for more DAG visualization
+
+## Next Steps
+
+- See `vignette("bayesian-workflow")` for fitting causal models with brms
+- See `vignette("glm-models")` for causal inference with GLMs
+- See `vignette("advanced-topics")` for instrumental variables

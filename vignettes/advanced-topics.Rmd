@@ -1,0 +1,598 @@
+---
+title: "Advanced Topics: Multilevel, Measurement Error, and Gaussian Processes"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Advanced Topics: Multilevel, Measurement Error, and Gaussian Processes}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 7,
+  fig.height = 5
+)
+```
+
+## Introduction
+
+This vignette covers advanced modeling techniques:
+
+- **Multilevel models**: Varying intercepts, slopes, and complex structures
+- **Measurement error**: Handling imperfect measurements
+- **Gaussian processes**: Flexible non-parametric regression
+- **Networks**: Social network analysis
+
+```{r setup}
+library(tidyrethinking)
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+```
+
+## Multilevel Models
+
+### Varying Intercepts
+
+Groups differ in their baseline levels:
+
+```{r mlm-intercepts}
+# Simulate grouped data
+ml_data <- simulate_varying_intercepts(
+  n_groups = 20,
+  n_per_group = 10,
+  grand_intercept = 5,
+  between_group_sd = 2,
+  within_group_sd = 1,
+  seed = 42
+)
+
+# Visualize
+ggplot(ml_data, aes(x = factor(group), y = y)) +
+  geom_boxplot(fill = "steelblue", alpha = 0.5) +
+  geom_hline(yintercept = 5, linetype = "dashed", color = "red") +
+  labs(
+    x = "Group",
+    y = "Outcome",
+    title = "Varying Intercepts Across Groups",
+    subtitle = "Red line = grand mean"
+  ) +
+  theme_rethinking() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1))
+```
+
+### Partial Pooling (Shrinkage)
+
+Multilevel models balance between complete pooling and no pooling:
+
+```{r mlm-shrinkage}
+# Compute group statistics
+group_stats <- ml_data %>%
+  group_by(group) %>%
+  summarise(
+    mean_y = mean(y),
+    n = n()
+  )
+
+# Compute shrinkage
+shrinkage <- compute_shrinkage(
+  group_means = group_stats$mean_y,
+  group_ns = group_stats$n,
+  within_sd = 1,
+  between_sd = 2,
+  grand_mean = 5
+)
+
+# Visualize
+ggplot(shrinkage, aes(x = observed_mean, y = shrunken_mean)) +
+  geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "grey50") +
+  geom_segment(aes(xend = shrunken_mean, yend = shrunken_mean),
+               arrow = arrow(length = unit(0.2, "cm")), 
+               color = "steelblue", alpha = 0.6) +
+  geom_point(aes(size = n, color = shrinkage_factor), alpha = 0.8) +
+  scale_color_viridis_c(option = "plasma") +
+  labs(
+    x = "Observed group mean (no pooling)",
+    y = "Shrunken estimate (partial pooling)",
+    color = "Shrinkage",
+    size = "Group size",
+    title = "Partial Pooling Shrinks Estimates Toward Grand Mean",
+    subtitle = "Smaller groups shrink more"
+  ) +
+  theme_rethinking()
+```
+
+### Intraclass Correlation (ICC)
+
+How much variance is between vs within groups?
+
+```{r mlm-icc}
+icc_result <- compute_icc(
+  between_group_sd = 2,
+  within_group_sd = 1
+)
+
+icc_result
+
+# ICC interpretation:
+# 0.0: All variance within groups (no clustering)
+# 1.0: All variance between groups (perfect clustering)
+# 0.5: Equal variance between and within
+```
+
+### Varying Slopes
+
+Groups differ in their response to predictors:
+
+```{r mlm-slopes}
+# Simulate varying slopes
+slopes_data <- simulate_varying_slopes(
+  n_groups = 15,
+  n_per_group = 20,
+  grand_intercept = 3,
+  grand_slope = 0.5,
+  slope_sd = 0.3,
+  residual_sd = 0.5,
+  seed = 42
+)
+
+# Visualize
+ggplot(slopes_data, aes(x = x, y = y, group = group, color = group)) +
+  geom_point(alpha = 0.3, size = 1) +
+  geom_smooth(method = "lm", se = FALSE, linewidth = 0.8) +
+  scale_color_viridis_c() +
+  labs(
+    x = "Predictor",
+    y = "Outcome",
+    title = "Varying Slopes Across Groups",
+    subtitle = "Each group has different relationship"
+  ) +
+  theme_rethinking() +
+  theme(legend.position = "none")
+```
+
+### Cross-Classified Models
+
+Non-nested groupings (e.g., students in schools AND neighborhoods):
+
+```{r mlm-cross}
+# Simulate cross-classified structure
+cross_data <- simulate_cross_classified(
+  n_groups_1 = 10,  # Schools
+  n_groups_2 = 8,   # Neighborhoods
+  n_per_combo = 5,
+  group_1_sd = 1,
+  group_2_sd = 0.8,
+  seed = 42
+)
+
+# Visualize structure
+ggplot(cross_data, aes(x = factor(group_1), y = factor(group_2))) +
+  geom_count(aes(size = ..n..), color = "steelblue", alpha = 0.6) +
+  scale_size_area(max_size = 10) +
+  labs(
+    x = "Group 1 (e.g., School)",
+    y = "Group 2 (e.g., Neighborhood)",
+    size = "N observations",
+    title = "Cross-Classified Structure",
+    subtitle = "Each cell represents a school × neighborhood combination"
+  ) +
+  theme_rethinking()
+```
+
+### Temporal Autocorrelation
+
+Observations within groups are correlated over time:
+
+```{r mlm-temporal}
+# Simulate AR(1) within groups
+temporal_data <- simulate_temporal_autocorrelation(
+  n_groups = 5,
+  n_timepoints = 50,
+  rho = 0.7,  # AR(1) coefficient
+  sigma = 1,
+  seed = 42
+)
+
+# Visualize time series
+ggplot(temporal_data, aes(x = time, y = y, color = factor(group))) +
+  geom_line(linewidth = 0.8) +
+  geom_point(size = 1, alpha = 0.5) +
+  scale_color_viridis_d() +
+  labs(
+    x = "Time",
+    y = "Outcome",
+    color = "Group",
+    title = "Temporal Autocorrelation Within Groups",
+    subtitle = sprintf("AR(1) coefficient ρ = %.1f", 0.7)
+  ) +
+  theme_rethinking()
+
+# Check autocorrelation
+temporal_data %>%
+  group_by(group) %>%
+  summarise(
+    acf_lag1 = cor(y[-n()], y[-1]),
+    .groups = "drop"
+  )
+```
+
+## Measurement Error
+
+### Understanding Attenuation Bias
+
+Measurement error in predictors biases estimates toward zero:
+
+```{r measurement-error}
+# Simulate measurement error
+error_data <- simulate_measurement_error(
+  n = 500,
+  true_effect = 0.8,
+  measurement_sd = 0.5,
+  seed = 42
+)
+
+# Naive regression (ignores measurement error)
+naive_fit <- lm(y ~ x_observed, data = error_data)
+naive_estimate <- coef(naive_fit)["x_observed"]
+
+# True relationship (if we could observe x perfectly)
+true_fit <- lm(y ~ x_true, data = error_data)
+true_estimate <- coef(true_fit)["x_true"]
+
+# Expected bias
+bias <- compute_attenuation_bias(
+  true_effect = 0.8,
+  true_sd = 1,
+  measurement_sd = 0.5
+)
+
+tibble(
+  Model = c("True", "Observed", "Expected bias"),
+  Estimate = c(true_estimate, naive_estimate, bias$attenuated_effect)
+) %>%
+  knitr::kable(digits = 3)
+```
+
+### Visualizing Measurement Error
+
+```{r measurement-viz}
+ggplot(error_data, aes(x = x_true, y = y)) +
+  geom_point(aes(color = "True X"), alpha = 0.3, size = 2) +
+  geom_smooth(aes(color = "True X"), method = "lm", se = FALSE, linewidth = 1.5) +
+  geom_point(aes(x = x_observed, color = "Observed X"), alpha = 0.3, size = 2) +
+  geom_smooth(aes(x = x_observed, color = "Observed X"), 
+              method = "lm", se = FALSE, linewidth = 1.5) +
+  scale_color_manual(values = c("True X" = "darkgreen", "Observed X" = "coral")) +
+  labs(
+    x = "Predictor",
+    y = "Outcome",
+    color = "Data",
+    title = "Measurement Error Attenuates Estimates",
+    subtitle = sprintf("True slope = %.2f, Observed slope = %.2f", 
+                      true_estimate, naive_estimate)
+  ) +
+  theme_rethinking()
+```
+
+## Missing Data
+
+### Missing Completely at Random (MCAR)
+
+Missingness unrelated to any variable:
+
+```{r missing-mcar}
+# Simulate MCAR
+mcar_data <- simulate_mcar(
+  n = 500,
+  true_effect = 0.5,
+  missing_prob = 0.3,
+  seed = 42
+)
+
+# Complete case analysis is unbiased
+complete_cases <- mcar_data %>% filter(!missing)
+lm(y ~ x, data = complete_cases) %>% coef()
+```
+
+### Missing at Random (MAR)
+
+Missingness depends on observed variables:
+
+```{r missing-mar}
+# Simulate MAR
+mar_data <- simulate_mar(
+  n = 500,
+  true_effect = 0.5,
+  covariate_effect_on_missing = 1.5,
+  seed = 42
+)
+
+# Missingness depends on covariate
+table(mar_data$missing, mar_data$z > 0)
+
+# Complete case analysis may be biased
+# Need to model missingness or use imputation
+```
+
+### Instrumental Variables
+
+Use an instrument to handle confounding or measurement error:
+
+```{r missing-iv}
+# Simulate instrumental variable design
+iv_data <- simulate_instrument(
+  n = 1000,
+  instrument_strength = 0.7,  # Z -> X
+  true_effect = 0.5,           # X -> Y
+  confounder_effect = 1.0,     # U -> X, U -> Y
+  seed = 42
+)
+
+# Naive regression (biased by confounding)
+naive_iv <- lm(y ~ x, data = iv_data)
+coef(naive_iv)["x"]
+
+# Two-stage least squares (unbiased)
+tsls_result <- compute_tsls(
+  data = iv_data,
+  y_var = "y",
+  x_var = "x",
+  z_var = "z"
+)
+
+tsls_result
+```
+
+## Gaussian Processes
+
+### Squared Exponential Kernel
+
+Smooth, continuous functions:
+
+```{r gp-kernel}
+# Define observation points
+x_obs <- c(-2, -1, 0, 1.5, 2.5)
+y_obs <- c(0, 1, 0.5, -0.5, 0)
+
+# Compute covariance
+cov_matrix <- compute_squared_exponential(
+  x1 = x_obs,
+  x2 = x_obs,
+  eta_sq = 1,    # Maximum covariance
+  rho_sq = 1     # Length scale
+)
+
+# Visualize covariance
+cov_df <- as.data.frame(cov_matrix)
+colnames(cov_df) <- paste0("x", seq_along(x_obs))
+cov_df$x1 <- x_obs
+
+cov_long <- cov_df %>%
+  pivot_longer(-x1, names_to = "x2", values_to = "covariance") %>%
+  mutate(x2 = as.numeric(sub("x", "", x2)),
+         x2_val = x_obs[x2])
+
+ggplot(cov_long, aes(x = x1, y = x2_val, fill = covariance)) +
+  geom_tile() +
+  scale_fill_gradient2(low = "white", high = "steelblue", mid = "lightblue", midpoint = 0.5) +
+  labs(
+    x = "Point i",
+    y = "Point j",
+    fill = "Covariance",
+    title = "Squared Exponential Kernel",
+    subtitle = "Closer points are more correlated"
+  ) +
+  theme_rethinking()
+```
+
+### Prior Samples from GP
+
+```{r gp-prior}
+# Sample functions from GP prior
+x_grid <- seq(-3, 3, length.out = 100)
+prior_samples <- sample_gp_prior(
+  x = x_grid,
+  n_samples = 20,
+  eta_sq = 1,
+  rho_sq = 1,
+  seed = 42
+)
+
+# Visualize
+ggplot(prior_samples, aes(x = x, y = y, group = sample)) +
+  geom_line(alpha = 0.3, color = "steelblue") +
+  labs(
+    x = "Input",
+    y = "Output",
+    title = "Prior Functions from Gaussian Process",
+    subtitle = "Each line is one possible function"
+  ) +
+  theme_rethinking()
+```
+
+### GP Regression (Posterior)
+
+```{r gp-posterior}
+# Compute posterior predictions
+x_pred <- seq(-3, 3, length.out = 100)
+posterior <- compute_gp_posterior(
+  x_obs = x_obs,
+  y_obs = y_obs,
+  x_pred = x_pred,
+  eta_sq = 1,
+  rho_sq = 1,
+  sigma_sq = 0.1
+)
+
+# Visualize
+ggplot(posterior, aes(x = x)) +
+  geom_ribbon(aes(ymin = mean - 2*sd, ymax = mean + 2*sd),
+              fill = "steelblue", alpha = 0.3) +
+  geom_line(aes(y = mean), color = "steelblue", linewidth = 1) +
+  geom_point(data = tibble(x = x_obs, y = y_obs),
+             aes(x = x, y = y), size = 3, color = "red") +
+  labs(
+    x = "Input",
+    y = "Output",
+    title = "Gaussian Process Regression",
+    subtitle = "Line = posterior mean, ribbon = 95% credible interval, points = observations"
+  ) +
+  theme_rethinking()
+```
+
+### Periodic Kernel
+
+For cyclic patterns (seasons, days, etc.):
+
+```{r gp-periodic}
+# Generate seasonal data
+x_seasonal <- seq(0, 3, length.out = 200)  # 3 years
+cov_periodic <- compute_periodic_covariance(
+  x1 = x_seasonal,
+  x2 = x_seasonal,
+  eta_sq = 1,
+  rho_sq = 0.5,
+  period = 1  # Annual cycle
+)
+
+# Sample from periodic GP
+seasonal_samples <- sample_gp_prior(
+  x = x_seasonal,
+  n_samples = 10,
+  eta_sq = 1,
+  rho_sq = 0.5,
+  kernel = "periodic",
+  period = 1,
+  seed = 42
+)
+
+ggplot(seasonal_samples, aes(x = x, y = y, group = sample)) +
+  geom_line(alpha = 0.5, color = "darkgreen") +
+  labs(
+    x = "Time (years)",
+    y = "Value",
+    title = "Periodic Gaussian Process",
+    subtitle = "Captures repeating seasonal patterns"
+  ) +
+  theme_rethinking()
+```
+
+## Social Networks
+
+### Dyadic Data
+
+Network data with sender and receiver effects:
+
+```{r network-dyadic}
+# Simulate social network
+network <- simulate_dyadic_network(
+  n_nodes = 20,
+  sender_sd = 0.5,
+  receiver_sd = 0.5,
+  reciprocity = 1.5,
+  seed = 42
+)
+
+head(network)
+
+# Visualize as matrix
+adj_matrix <- create_adjacency_matrix(network, value_col = "tie")
+
+# Convert to long format for heatmap
+adj_long <- as.data.frame(adj_matrix) %>%
+  mutate(sender = rownames(adj_matrix)) %>%
+  pivot_longer(-sender, names_to = "receiver", values_to = "tie")
+
+ggplot(adj_long, aes(x = receiver, y = sender, fill = factor(tie))) +
+  geom_tile(color = "white") +
+  scale_fill_manual(values = c("0" = "white", "1" = "steelblue")) +
+  labs(
+    x = "Receiver",
+    y = "Sender",
+    fill = "Tie",
+    title = "Social Network Adjacency Matrix"
+  ) +
+  theme_rethinking() +
+  theme(axis.text.x = element_text(angle = 90, hjust = 1, size = 6),
+        axis.text.y = element_text(size = 6))
+```
+
+### Network Statistics
+
+```{r network-stats}
+# Compute descriptive statistics
+stats <- compute_network_stats(network)
+stats
+
+# Interpretation:
+# - Density: proportion of possible ties that exist
+# - Reciprocity: tendency for ties to be mutual
+# - Degree stats: distribution of connections per node
+```
+
+### Transitive Closure
+
+"Friend of a friend" becomes a friend:
+
+```{r network-transitive}
+# Simulate transitivity
+trans_network <- simulate_transitive_closure(
+  n_nodes = 15,
+  initial_ties = 20,
+  transitivity_prob = 0.7,
+  seed = 42
+)
+
+# Count triangles
+triangles <- trans_network %>%
+  group_by(sender) %>%
+  summarise(n_ties = n(), .groups = "drop")
+
+ggplot(triangles, aes(x = n_ties)) +
+  geom_histogram(binwidth = 1, fill = "coral", alpha = 0.7) +
+  labs(
+    x = "Number of outgoing ties",
+    y = "Count of nodes",
+    title = "Degree Distribution with Transitivity",
+    subtitle = "Some nodes have many ties due to transitivity"
+  ) +
+  theme_rethinking()
+```
+
+## Integration Example
+
+Combining techniques:
+
+```{r integration, eval=FALSE}
+# 1. Simulate multilevel data with measurement error
+ml_error <- simulate_varying_intercepts(n_groups = 20, n_per_group = 20) %>%
+  mutate(
+    x_true = rnorm(n()),
+    x_obs = x_true + rnorm(n(), 0, 0.5),  # Measurement error
+    y = y + 0.7 * x_true + rnorm(n())
+  )
+
+# 2. Fit multilevel model with measurement error correction
+# (Requires specialized packages like brms or Stan)
+
+# 3. Use GP for non-linear effects
+# 4. Account for missing data patterns
+# 5. Validate with posterior predictive checks
+```
+
+## Resources
+
+- McElreath, R. (2020). *Statistical Rethinking*, Chapters 12-18
+- Rasmussen & Williams (2006). *Gaussian Processes for Machine Learning*
+- Snijders & Bosker (2012). *Multilevel Analysis*
+- Wasserman & Faust (1994). *Social Network Analysis*
+
+## Next Steps
+
+- See `vignette("bayesian-workflow")` for implementing these models with brms
+- See `vignette("causal-inference")` for combining DAGs with multilevel models
+- Explore **brms** for Bayesian multilevel models
+- Explore **tidygraph** and **ggraph** for network visualization

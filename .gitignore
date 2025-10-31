@@ -1,0 +1,27 @@
+# R package build artifacts
+.Rproj.user
+.Rhistory
+.RData
+.Ruserdata
+*.Rproj
+
+# Package build
+*.tar.gz
+*.zip
+
+# Documentation
+/man/*.Rd
+
+# Temporary files
+*~
+*.swp
+*.swo
+.DS_Store
+
+# Stan compilation
+*.rds
+*.csv
+*.txt
+
+# Test artifacts
+tests/testthat/_snaps

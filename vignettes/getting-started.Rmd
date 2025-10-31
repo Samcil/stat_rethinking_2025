@@ -1,0 +1,269 @@
+---
+title: "Getting Started with tidyrethinking"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Getting Started with tidyrethinking}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 7,
+  fig.height = 5
+)
+```
+
+## Introduction
+
+The **tidyrethinking** package provides modern, tidyverse-aligned tools for learning and applying Bayesian statistics through the lens of Richard McElreath's Statistical Rethinking course. This vignette introduces the core concepts and demonstrates basic usage.
+
+```{r setup}
+library(tidyrethinking)
+library(dplyr)
+library(ggplot2)
+```
+
+## Garden of Forking Paths
+
+The garden of forking paths is a metaphor for Bayesian updating. Each path represents a possible hypothesis, and observations eliminate paths that are inconsistent with the data.
+
+### Simulating the Garden
+
+Let's simulate three observations: water (1), land (0), water (1). We have four marbles: one land (0) and three water (1).
+
+```{r garden-simulate}
+observations <- c(1, 0, 1)
+possibilities <- c(0, 1, 1, 1)
+
+paths <- simulate_garden_paths(observations, possibilities)
+head(paths, 10)
+```
+
+### Visualizing Paths
+
+We can create a radial layout to visualize how paths branch and which remain viable:
+
+```{r garden-layout}
+paths_layout <- create_garden_layout(paths)
+
+ggplot(paths_layout, aes(x = x, y = y, group = path_id)) +
+  geom_path(aes(alpha = viable, color = viable)) +
+  geom_point(aes(color = viable, size = viable)) +
+  scale_alpha_manual(values = c(0.2, 1)) +
+  scale_color_manual(values = c("grey50", "steelblue")) +
+  scale_size_manual(values = c(1, 2)) +
+  coord_fixed() +
+  theme_rethinking() +
+  theme(legend.position = "bottom") +
+  labs(title = "Garden of Forking Paths",
+       subtitle = "Observations: Water, Land, Water")
+```
+
+### Counting Outcomes
+
+We can count the number of ways each outcome can occur:
+
+```{r garden-count}
+count_path_outcomes(observations, possibilities)
+```
+
+## Globe Tossing
+
+The globe tossing example demonstrates Bayesian updating with a conjugate Beta-Binomial model.
+
+### Simulating Tosses
+
+First, let's generate some simulated globe tosses:
+
+```{r globe-simulate}
+tosses <- simulate_globe_tosses(
+  n = 9, 
+  prob_water = 0.7, 
+  seed = 42
+)
+
+tosses
+```
+
+### Bayesian Updating
+
+Now let's compute the posterior distribution after each observation:
+
+```{r globe-update}
+posteriors <- compute_beta_updates(
+  observations = tosses$result,
+  prior_alpha = 1,
+  prior_beta = 1
+)
+
+posteriors
+```
+
+### Visualizing Posterior Evolution
+
+We can see how the posterior distribution evolves with each new observation:
+
+```{r globe-density}
+density_data <- generate_posterior_density(posteriors, n_points = 100)
+
+ggplot(density_data, aes(x = p, y = density, group = toss)) +
+  geom_line(aes(color = toss), linewidth = 1) +
+  scale_color_viridis_c() +
+  labs(
+    x = "Proportion water",
+    y = "Posterior density",
+    color = "Toss",
+    title = "Posterior Evolution with Each Observation"
+  ) +
+  theme_rethinking()
+```
+
+### Posterior Intervals
+
+Calculate credible intervals from the final posterior:
+
+```{r globe-interval}
+final_posterior <- posteriors[nrow(posteriors), ]
+
+interval <- compute_posterior_interval(
+  alpha = final_posterior$alpha,
+  beta = final_posterior$beta,
+  prob = 0.89
+)
+
+interval
+```
+
+### Posterior Predictive Simulation
+
+We can simulate future observations using the posterior predictive distribution:
+
+```{r globe-predictive}
+predictive_samples <- sample_posterior_predictive(
+  posterior_alpha = final_posterior$alpha,
+  posterior_beta = final_posterior$beta,
+  n_tosses = 9,
+  n_samples = 1000,
+  seed = 42
+)
+
+ggplot(predictive_samples, aes(x = n_water)) +
+  geom_histogram(binwidth = 1, fill = "steelblue", color = "white") +
+  geom_vline(xintercept = sum(tosses$result == "W"), 
+             linetype = "dashed", color = "red", linewidth = 1) +
+  labs(
+    x = "Number of water observations (out of 9)",
+    y = "Count",
+    title = "Posterior Predictive Distribution",
+    subtitle = "Red line shows observed data"
+  ) +
+  theme_rethinking()
+```
+
+## Central Limit Theorem via Random Walk
+
+The random walk simulation demonstrates how sums of random variables converge to normal distributions.
+
+### Simulating Random Walk
+
+```{r walk-simulate}
+walk_data <- simulate_random_walk(
+  n_individuals = 1000,
+  n_steps = 16,
+  seed = 42
+)
+
+# View a few paths
+walk_data %>%
+  filter(individual <= 5) %>%
+  ggplot(aes(x = step, y = position, color = factor(individual))) +
+  geom_line() +
+  geom_point() +
+  labs(
+    x = "Step",
+    y = "Position",
+    color = "Individual",
+    title = "Five Random Walk Paths"
+  ) +
+  theme_rethinking()
+```
+
+### Final Distribution
+
+After 16 steps, the distribution of positions approximates a normal distribution:
+
+```{r walk-final}
+final_positions <- walk_data %>%
+  filter(step == max(step))
+
+ggplot(final_positions, aes(x = position)) +
+  geom_histogram(aes(y = ..density..), binwidth = 1, 
+                 fill = "steelblue", alpha = 0.7) +
+  stat_function(
+    fun = dnorm,
+    args = list(
+      mean = mean(final_positions$position),
+      sd = sd(final_positions$position)
+    ),
+    color = "red",
+    linewidth = 1
+  ) +
+  labs(
+    x = "Position",
+    y = "Density",
+    title = "Final Distribution after 16 Steps",
+    subtitle = "Red curve shows matching normal distribution"
+  ) +
+  theme_rethinking()
+```
+
+### Comparing to Normal
+
+We can formally compare the empirical distribution to the theoretical normal:
+
+```{r walk-compare}
+comparison <- compare_to_normal(walk_data, step_to_compare = 16)
+
+ggplot(comparison, aes(x = x)) +
+  geom_line(aes(y = empirical_density, color = "Observed"), linewidth = 1) +
+  geom_line(aes(y = theoretical_density, color = "Normal"), 
+            linetype = "dashed", linewidth = 1) +
+  scale_color_manual(values = c("Observed" = "steelblue", "Normal" = "red")) +
+  labs(
+    x = "Position",
+    y = "Density",
+    color = "Distribution",
+    title = "Empirical vs. Theoretical Normal Distribution"
+  ) +
+  theme_rethinking()
+```
+
+### Testing Normality
+
+```{r walk-test}
+normality_test <- test_walk_normality(walk_data, final_step_only = TRUE)
+normality_test
+```
+
+The high Shapiro-Wilk p-value and low skewness/kurtosis indicate the distribution is approximately normal.
+
+## Next Steps
+
+This vignette introduced the core functionality of tidyrethinking for Chapters 2-3. Additional vignettes cover:
+
+- Linear models and regression (Chapter 4)
+- Causal inference with DAGs (Chapters 5-6)
+- MCMC and model comparison (Chapters 7-8)
+- Generalized linear models (Chapters 9-11)
+- Multilevel models (Chapters 12-14)
+- Advanced topics (Chapters 15-19)
+
+For more information, see the package documentation:
+
+```{r, eval=FALSE}
+?tidyrethinking
+help(package = "tidyrethinking")
+```
