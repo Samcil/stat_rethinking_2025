@@ -110,7 +110,7 @@ We can see how the posterior distribution evolves with each new observation:
 density_data <- generate_posterior_density(posteriors, n_points = 100)
 
 ggplot(density_data, aes(x = p, y = density, group = toss)) +
-  geom_line(aes(color = toss), size = 1) +
+  geom_line(aes(color = toss), linewidth = 1) +
   scale_color_viridis_c() +
   labs(
     x = "Proportion water",
@@ -153,7 +153,7 @@ predictive_samples <- sample_posterior_predictive(
 ggplot(predictive_samples, aes(x = n_water)) +
   geom_histogram(binwidth = 1, fill = "steelblue", color = "white") +
   geom_vline(xintercept = sum(tosses$result == "W"), 
-             linetype = "dashed", color = "red", size = 1) +
+             linetype = "dashed", color = "red", linewidth = 1) +
   labs(
     x = "Number of water observations (out of 9)",
     y = "Count",
@@ -209,7 +209,7 @@ ggplot(final_positions, aes(x = position)) +
       sd = sd(final_positions$position)
     ),
     color = "red",
-    size = 1
+    linewidth = 1
   ) +
   labs(
     x = "Position",
@@ -228,9 +228,9 @@ We can formally compare the empirical distribution to the theoretical normal:
 comparison <- compare_to_normal(walk_data, step_to_compare = 16)
 
 ggplot(comparison, aes(x = x)) +
-  geom_line(aes(y = empirical_density, color = "Observed"), size = 1) +
+  geom_line(aes(y = empirical_density, color = "Observed"), linewidth = 1) +
   geom_line(aes(y = theoretical_density, color = "Normal"), 
-            linetype = "dashed", size = 1) +
+            linetype = "dashed", linewidth = 1) +
   scale_color_manual(values = c("Observed" = "steelblue", "Normal" = "red")) +
   labs(
     x = "Position",
