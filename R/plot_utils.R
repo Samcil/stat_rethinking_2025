@@ -65,8 +65,9 @@ lines_with_outline <- function(data = NULL, x = NULL, y = NULL,
 #'   be added to a ggplot object with `+`.
 #' @examples
 #' library(ggplot2)
-#' ggplot() + abline_with_outline(h = 0.5)
-#' 
+#' ggplot() +
+#'   abline_with_outline(h = 0.5)
+#'
 #' # Combine with other geoms
 #' df <- tibble::tibble(x = c(0, 1), y = c(0, 1))
 #' lines_with_outline(df, color = "blue") +
@@ -80,36 +81,47 @@ abline_with_outline <- function(a = NULL, b = NULL,
                                 color = "black", size = 1,
                                 outline_color = "white", outline_expand = 2, ...) {
   layers <- list()
-  
+
   # Outline first (drawn below)
   if (!is.null(a) && !is.null(b)) {
     layers <- c(
       layers,
-      list(ggplot2::geom_abline(intercept = a, slope = b,
-                               color = outline_color, linewidth = size * outline_expand, ...)),
-      list(ggplot2::geom_abline(intercept = a, slope = b,
-                               color = color, linewidth = size, ...))
+      list(ggplot2::geom_abline(
+        intercept = a, slope = b,
+        color = outline_color, linewidth = size * outline_expand, ...
+      )),
+      list(ggplot2::geom_abline(
+        intercept = a, slope = b,
+        color = color, linewidth = size, ...
+      ))
     )
   }
   if (!is.null(h)) {
     layers <- c(
       layers,
-      list(ggplot2::geom_hline(yintercept = h,
-                              color = outline_color, linewidth = size * outline_expand, ...)),
-      list(ggplot2::geom_hline(yintercept = h,
-                              color = color, linewidth = size, ...))
+      list(ggplot2::geom_hline(
+        yintercept = h,
+        color = outline_color, linewidth = size * outline_expand, ...
+      )),
+      list(ggplot2::geom_hline(
+        yintercept = h,
+        color = color, linewidth = size, ...
+      ))
     )
   }
   if (!is.null(v)) {
     layers <- c(
       layers,
-      list(ggplot2::geom_vline(xintercept = v,
-                              color = outline_color, linewidth = size * outline_expand, ...)),
-      list(ggplot2::geom_vline(xintercept = v,
-                              color = color, linewidth = size, ...))
+      list(ggplot2::geom_vline(
+        xintercept = v,
+        color = outline_color, linewidth = size * outline_expand, ...
+      )),
+      list(ggplot2::geom_vline(
+        xintercept = v,
+        color = color, linewidth = size, ...
+      ))
     )
   }
-  
+
   layers
 }
-
