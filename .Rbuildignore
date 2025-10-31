@@ -1,0 +1,12 @@
+^.*\.Rproj$
+^\.Rproj\.user$
+^README\.Rmd$
+^LICENSE\.md$
+^\.github$
+^scripts$
+^homework$
+^slides$
+^memes$
+^title\.gif$
+^tidyrethinking_prd\.md$
+^data-raw$
