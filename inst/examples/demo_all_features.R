@@ -17,7 +17,7 @@ cat("=== tidyrethinking Package Demo ===\n\n")
 cat("Chapter 2: Garden of Forking Paths\n")
 cat("-----------------------------------\n")
 
-observations <- c(1, 0, 1)
+observations <- c(1, 0, 1) |> as.integer()
 possibilities <- c(0, 1, 1, 1)
 
 paths <- simulate_garden_paths(observations, possibilities)
