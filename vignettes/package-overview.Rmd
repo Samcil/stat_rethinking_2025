@@ -1,0 +1,515 @@
+---
+title: "tidyrethinking Package Overview"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{tidyrethinking Package Overview}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 7,
+  fig.height = 5
+)
+```
+
+## What is tidyrethinking?
+
+**tidyrethinking** modernizes Statistical Rethinking course materials into a production-ready R package. It provides:
+
+- ✅ **85+ functions** organized by topic (Chapters 2-18)
+- ✅ **Tidyverse-aligned** API (tibbles, pipes, snake_case)
+- ✅ **Comprehensive documentation** with examples
+- ✅ **Full test coverage** ensuring reliability
+- ✅ **Reproducible workflows** via seed parameters
+- ✅ **Integration-ready** with brms, tidybayes, ggdist
+
+```{r setup}
+library(tidyrethinking)
+library(dplyr)
+library(ggplot2)
+```
+
+## Package Structure
+
+### Foundation Utilities
+
+Core tools used across all chapters:
+
+```{r foundation}
+# Geometry transformations
+polar_to_cartesian(r = 1, theta = pi/4)
+cartesian_to_polar(x = 1, y = 1)
+
+# Plotting themes
+ggplot(mtcars, aes(x = wt, y = mpg)) +
+  geom_point() +
+  theme_rethinking()
+
+# Color palettes
+rethinking_colors(3)
+
+# Validation helpers (used internally)
+# validate_probability(0.5)  # Ensures 0 ≤ p ≤ 1
+# validate_positive(10)       # Ensures x > 0
+```
+
+### Chapter 2: Bayesian Fundamentals
+
+```{r ch2, eval=FALSE}
+# Garden of forking paths
+paths <- simulate_garden_paths(c(1, 0, 1), c(0, 1, 1, 1))
+layout <- create_garden_layout(paths)
+count_path_outcomes(c(1, 0, 1), c(0, 1, 1, 1))
+
+# Globe tossing
+tosses <- simulate_globe_tosses(n = 9, prob_water = 0.7)
+posteriors <- compute_beta_updates(tosses$result)
+intervals <- compute_posterior_interval(alpha = 10, beta = 4, prob = 0.89)
+predictive <- sample_posterior_predictive(10, 4, n_tosses = 9, n_samples = 1000)
+```
+
+### Chapters 3-4: Gaussian Models
+
+```{r ch3-4, eval=FALSE}
+# Random walk (CLT demonstration)
+walk <- simulate_random_walk(n_individuals = 1000, n_steps = 16)
+comparison <- compare_to_normal(walk, step_to_compare = 16)
+test <- test_walk_normality(walk)
+
+# Prior/posterior predictive
+prior_pred <- generate_prior_predictive_linear(x, n_samples = 100)
+posterior <- compute_linear_posterior(x, y, prior_mean, prior_sd, sigma)
+post_samples <- sample_linear_posterior(posterior, n_samples = 1000)
+pred_lines <- generate_posterior_predictive_lines(x, intercepts, slopes)
+intervals <- compute_prediction_intervals(predictions, probs = c(0.67, 0.89, 0.97))
+```
+
+### Chapters 5-6: Causal Inference
+
+```{r ch5-6, eval=FALSE}
+# DAG utilities
+positions <- create_dag_positions(c("Z", "X", "Y"), layout = "horizontal")
+edges <- create_dag_edges(from = c("Z", "Z"), to = c("X", "Y"), positions)
+
+# Causal simulations
+confounded <- simulate_confounding(n = 1000, effect_z_x = 1, effect_z_y = 1.5)
+collider <- simulate_collider_bias(n = 1000, effect_x_c = 1, effect_y_c = 1)
+mediation <- simulate_post_treatment_bias(n = 1000, effect_x_m = 0.7, effect_m_y = 0.8)
+```
+
+### Chapter 8: MCMC
+
+```{r ch8, eval=FALSE}
+# Metropolis algorithm
+mcmc <- simulate_metropolis(n_steps = 10000, start = c(0, 0))
+diagnostics <- compute_mcmc_diagnostics(mcmc)
+
+# Multiple chains
+chains <- simulate_multiple_chains(n_chains = 4, n_steps = 1000)
+rhat <- compute_rhat(chains, var = "island")
+
+# Visualization prep
+trace_data <- create_trace_plot_data(chains)
+```
+
+### Chapters 9-10: Binomial GLMs
+
+```{r ch9-10, eval=FALSE}
+# Simulate binomial data
+data <- simulate_binomial_data(n = 200, intercept = -1, slopes = c(0.8, -0.5))
+
+# Link functions
+log_odds <- logit(0.7)
+prob <- inv_logit(0.5)
+
+# Posterior inference
+posterior <- sample_binomial_posterior(y, n, x_matrix, n_samples = 1000)
+intervals <- compute_binomial_intervals(posterior$intercept, probs = c(0.89, 0.95))
+
+# Effect sizes
+odds_ratio <- compute_log_odds_ratio(p_baseline = 0.3, p_treatment = 0.6)
+```
+
+### Chapter 11: Poisson GLMs
+
+```{r ch11, eval=FALSE}
+# Simulate count data
+counts <- simulate_poisson_data(n = 300, intercept = 1.5, slopes = 0.3)
+
+# Zero-inflated
+zip_data <- simulate_zero_inflated_poisson(n = 500, intercept = 1, slopes = 0.5, zero_prob = 0.4)
+
+# Rate ratios
+rate_ratio <- compute_rate_ratio(coefficients)
+
+# Posterior
+posterior <- sample_poisson_posterior(y, x_matrix, n_samples = 1000)
+intervals <- compute_poisson_intervals(posterior$intercept)
+```
+
+### Chapters 12-13: Multilevel Basics
+
+```{r ch12-13, eval=FALSE}
+# Varying intercepts
+vi_data <- simulate_varying_intercepts(n_groups = 20, n_per_group = 10)
+
+# Varying slopes
+vs_data <- simulate_varying_slopes(n_groups = 15, n_per_group = 20)
+
+# Correlated effects
+corr_data <- simulate_correlated_effects(n_groups = 20, n_per_group = 15, correlation = 0.6)
+
+# Shrinkage
+shrinkage <- compute_shrinkage(group_means, group_ns, within_sd = 2, between_sd = 1)
+
+# ICC
+icc <- compute_icc(between_group_sd = 2, within_group_sd = 1)
+```
+
+### Chapter 14: Advanced Multilevel
+
+```{r ch14, eval=FALSE}
+# Cross-classified
+cross <- simulate_cross_classified(n_groups_1 = 10, n_groups_2 = 8, n_per_combo = 5)
+
+# Temporal autocorrelation
+temporal <- simulate_temporal_autocorrelation(n_groups = 5, n_timepoints = 50, rho = 0.7)
+
+# Spatial autocorrelation
+spatial <- simulate_spatial_autocorrelation(n_locations = 50, rho = 0.8)
+
+# Post-stratification
+weights <- compute_poststrat_weights(sample_counts, population_counts)
+```
+
+### Chapter 15: Measurement Error
+
+```{r ch15, eval=FALSE}
+# Measurement error
+error_data <- simulate_measurement_error(n = 500, true_effect = 0.8, measurement_sd = 0.5)
+bias <- compute_attenuation_bias(true_effect = 0.8, true_sd = 1, measurement_sd = 0.5)
+
+# Missing data patterns
+mcar <- simulate_mcar(n = 500, true_effect = 0.5, missing_prob = 0.3)
+mar <- simulate_mar(n = 500, true_effect = 0.5, covariate_effect_on_missing = 1.5)
+
+# Imputation diagnostics
+mice_summary <- compute_mice_summary(imputed_datasets)
+```
+
+### Chapter 16: Gaussian Processes
+
+```{r ch16, eval=FALSE}
+# Kernels
+cov_se <- compute_squared_exponential(x1, x2, eta_sq = 1, rho_sq = 1)
+cov_periodic <- compute_periodic_covariance(x1, x2, eta_sq = 1, rho_sq = 0.5, period = 1)
+
+# Prior samples
+prior <- sample_gp_prior(x = seq(-3, 3, 0.1), n_samples = 20)
+
+# Posterior
+posterior <- compute_gp_posterior(x_obs, y_obs, x_pred, eta_sq = 1, rho_sq = 1)
+post_samples <- sample_gp_posterior(x_obs, y_obs, x_pred, n_samples = 100)
+```
+
+### Chapter 17: Social Networks
+
+```{r ch17, eval=FALSE}
+# Dyadic network
+network <- simulate_dyadic_network(n_nodes = 50, reciprocity = 2)
+adj_matrix <- create_adjacency_matrix(network, value_col = "tie")
+stats <- compute_network_stats(network)
+
+# Transitive closure
+trans_net <- simulate_transitive_closure(n_nodes = 30, initial_ties = 40, transitivity_prob = 0.7)
+
+# Independence baseline
+indep <- compute_dyadic_independence(network)
+```
+
+### Chapter 18: Advanced Missing Data
+
+```{r ch18, eval=FALSE}
+# MNAR
+mnar <- simulate_mnar(n = 500, true_effect = 0.5, outcome_effect_on_missing = 1.0)
+bias <- compute_selection_bias(complete_estimate, full_estimate)
+
+# Instrumental variables
+iv_data <- simulate_instrument(n = 1000, instrument_strength = 0.7, true_effect = 0.5)
+tsls <- compute_tsls(iv_data, y_var = "y", x_var = "x", z_var = "z")
+
+# Censored data
+censored <- simulate_censored(n = 500, true_mean = 5, lower_limit = 0, upper_limit = 10)
+summary <- compute_censoring_summary(censored)
+```
+
+## Integration with Bayesian Ecosystem
+
+### With brms
+
+```{r brms, eval=FALSE}
+library(brms)
+library(tidybayes)
+library(ggdist)
+
+# Simulate with tidyrethinking
+data <- simulate_varying_intercepts(n_groups = 20, n_per_group = 10)
+
+# Fit with brms
+fit <- brm(y ~ 1 + (1 | group), data = data)
+
+# Extract with tidybayes
+posterior <- fit %>% spread_draws(b_Intercept, sd_group__Intercept)
+
+# Visualize with ggdist
+posterior %>%
+  ggplot(aes(x = sd_group__Intercept)) +
+  stat_halfeye() +
+  theme_rethinking()
+
+# Analyze with tidyrethinking
+shrinkage <- compute_shrinkage(
+  group_means = ...,
+  group_ns = ...,
+  within_sd = mean(posterior$sigma),
+  between_sd = mean(posterior$sd_group__Intercept)
+)
+```
+
+### With cmdstanr
+
+```{r cmdstan, eval=FALSE}
+library(cmdstanr)
+
+# Simulate data
+data <- simulate_binomial_data(n = 100, intercept = -1, slopes = 0.5)
+
+# Prepare for Stan
+stan_data <- list(
+  N = nrow(data),
+  y = data$y,
+  x = data$x_1
+)
+
+# Fit model
+model <- cmdstan_model("logistic_regression.stan")
+fit <- model$sample(data = stan_data)
+
+# Diagnose with tidyrethinking
+chains <- fit$draws(format = "df")
+rhat <- compute_rhat(chains, var = "beta")
+```
+
+### With ggdist and bayesplot
+
+```{r viz, eval=FALSE}
+library(ggdist)
+library(bayesplot)
+
+# Generate predictions from tidyrethinking
+posterior_lines <- generate_posterior_predictive_lines(
+  x = seq(-2, 2, length.out = 100),
+  intercepts = posterior$intercept,
+  slopes = posterior$slope
+)
+
+# Visualize with ggdist
+ggplot(posterior_lines, aes(x = x, y = y)) +
+  stat_lineribbon(aes(group = sample), .width = c(0.50, 0.89, 0.95)) +
+  scale_fill_brewer() +
+  theme_rethinking()
+
+# MCMC diagnostics with bayesplot
+mcmc_trace(fit)
+mcmc_dens_overlay(fit)
+```
+
+## Design Philosophy
+
+### 1. Tidyverse Principles
+
+```{r tidy-principles, eval=FALSE}
+# ✅ Returns tibbles
+result <- simulate_garden_paths(c(1, 0, 1), c(0, 1, 1, 1))
+class(result)  # "tbl_df" "tbl" "data.frame"
+
+# ✅ Pipe-friendly
+data %>%
+  simulate_confounding(n = 1000) %>%
+  mutate(outcome_group = cut(y, breaks = 3)) %>%
+  ggplot(aes(x = x, y = y, color = outcome_group)) +
+  geom_point()
+
+# ✅ Snake_case naming
+simulate_varying_intercepts()  # Not SimulateVaryingIntercepts()
+compute_shrinkage()            # Not ComputeShrinkage()
+
+# ✅ Explicit arguments (no abbreviations)
+simulate_garden_paths(
+  observations = c(1, 0, 1),
+  possibilities = c(0, 1, 1, 1)
+)
+```
+
+### 2. Reproducibility
+
+```{r reproducibility, eval=FALSE}
+# All stochastic functions accept seed
+set.seed(42)
+data1 <- simulate_binomial_data(n = 100, intercept = 0, slopes = 0.5)
+
+# Equivalent
+data2 <- simulate_binomial_data(n = 100, intercept = 0, slopes = 0.5, seed = 42)
+
+identical(data1, data2)  # TRUE
+```
+
+### 3. Input Validation
+
+```{r validation, eval=FALSE}
+# Clear error messages
+simulate_garden_paths(
+  observations = c(1, 2, 3),  # Invalid: not 0/1
+  possibilities = c(0, 1)
+)
+# Error: Assertion on 'observations' failed: Must have names.
+
+# Helpful feedback
+compute_icc(
+  between_group_sd = -1,  # Invalid: negative
+  within_group_sd = 1
+)
+# Error: Assertion on 'between_group_sd' failed: Element 1 is not >= 0.
+```
+
+### 4. Comprehensive Documentation
+
+Every function has:
+- Clear description
+- Parameter explanations
+- Return value documentation
+- Executable examples
+- References to book chapters
+
+```{r docs, eval=FALSE}
+?simulate_confounding
+?compute_gp_posterior
+?create_dag_positions
+```
+
+## Quick Start Workflows
+
+### Workflow 1: Explore Causal Structure
+
+```{r workflow-1, eval=FALSE}
+# 1. Draw your DAG
+positions <- create_dag_positions(c("Z", "X", "Y"), layout = "custom", ...)
+edges <- create_dag_edges(from = c("Z", "Z", "X"), to = c("X", "Y", "Y"), ...)
+
+# 2. Simulate from the DAG
+data <- simulate_confounding(n = 1000, effect_z_x = 1, effect_z_y = 1.5, effect_x_y = 0.5)
+
+# 3. Test different adjustment strategies
+lm(y ~ x, data = data)          # Biased
+lm(y ~ x + z, data = data)      # Unbiased
+
+# 4. Visualize
+ggplot(data, aes(x = x, y = y)) +
+  geom_point(aes(color = z)) +
+  geom_smooth(method = "lm") +
+  theme_rethinking()
+```
+
+### Workflow 2: Build and Validate GLM
+
+```{r workflow-2, eval=FALSE}
+# 1. Generate data with known parameters
+data <- simulate_poisson_data(n = 300, intercept = 1.5, slopes = 0.3)
+
+# 2. Fit model
+fit <- glm(y ~ x_1, data = data, family = poisson())
+
+# 3. Check recovery
+coef(fit)["x_1"]  # Should be ≈ 0.3
+
+# 4. Compute effect sizes
+rate_ratio <- compute_rate_ratio(coef(fit)["x_1"])
+```
+
+### Workflow 3: Multilevel Analysis
+
+```{r workflow-3, eval=FALSE}
+# 1. Simulate hierarchical data
+data <- simulate_varying_intercepts(n_groups = 20, n_per_group = 10)
+
+# 2. Fit with lme4 or brms
+library(lme4)
+fit <- lmer(y ~ 1 + (1 | group), data = data)
+
+# 3. Extract variance components
+between_sd <- sqrt(VarCorr(fit)$group[1])
+within_sd <- sigma(fit)
+
+# 4. Analyze shrinkage
+group_stats <- data %>% group_by(group) %>% summarise(mean = mean(y), n = n())
+shrinkage <- compute_shrinkage(group_stats$mean, group_stats$n, within_sd, between_sd)
+
+# 5. Compute ICC
+icc <- compute_icc(between_sd, within_sd)
+```
+
+## Learning Path
+
+### Beginner
+1. `vignette("getting-started")` - Chapters 2-3 basics
+2. `vignette("causal-inference")` - DAGs and confounding
+3. `vignette("glm-models")` - Binomial and Poisson
+
+### Intermediate
+4. `vignette("bayesian-workflow")` - Integration with brms/tidybayes
+5. Chapters 8-11 functions - MCMC and GLMs
+6. Chapters 12-13 functions - Multilevel basics
+
+### Advanced
+7. `vignette("advanced-topics")` - Measurement, GPs, networks
+8. Chapters 14-18 functions - Complex structures
+9. Custom Stan models with cmdstanr
+
+## Resources
+
+### Package Documentation
+- GitHub: <https://github.com/Samcil/stat_rethinking_2025>
+- Issues: <https://github.com/Samcil/stat_rethinking_2025/issues>
+
+### Related Packages
+- **brms**: <https://paul-buerkner.github.io/brms/>
+- **tidybayes**: <https://mjskay.github.io/tidybayes/>
+- **ggdist**: <https://mjskay.github.io/ggdist/>
+- **bayesplot**: <https://mc-stan.org/bayesplot/>
+- **rethinking**: <https://github.com/rmcelreath/rethinking>
+
+### Books
+- McElreath, R. (2020). *Statistical Rethinking* (2nd ed.)
+- Gelman et al. (2020). *Bayesian Data Analysis* (3rd ed.)
+- Kruschke, J. (2014). *Doing Bayesian Data Analysis*
+
+## Getting Help
+
+```{r help, eval=FALSE}
+# Function documentation
+?simulate_confounding
+?compute_gp_posterior
+
+# Package overview
+help(package = "tidyrethinking")
+
+# All vignettes
+browseVignettes("tidyrethinking")
+
+# Report bugs
+# https://github.com/Samcil/stat_rethinking_2025/issues
+```
