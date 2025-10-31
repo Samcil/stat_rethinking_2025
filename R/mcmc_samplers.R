@@ -33,8 +33,10 @@ NULL
 #'   x <- params[1]
 #'   tibble::tibble(param1 = x, neg_log_prob = 0.5 * x^2)
 #' }
-#' draws <- metropolis_sampler(std_norm_target, data = NULL, init = 0,
-#'                             n_samples = 200, step = 1, chains = 2, seed = 42)
+#' draws <- metropolis_sampler(std_norm_target,
+#'   data = NULL, init = 0,
+#'   n_samples = 200, step = 1, chains = 2, seed = 42
+#' )
 #'
 #' # Parallel usage with purrr::in_parallel() and mirai daemons
 #' # Parallelization is optional and controlled by the user.
@@ -48,11 +50,12 @@ NULL
 #'     cfg,
 #'     purrr::in_parallel(
 #'       \(step, seed) metropolis_sampler(
-#'         std_norm_target, data = NULL, init = 0,
+#'         std_norm_target,
+#'         data = NULL, init = 0,
 #'         n_samples = 1000, step = step, chains = 4, seed = seed
 #'       ),
 #'       metropolis_sampler = metropolis_sampler,
-#'       std_norm_target   = std_norm_target
+#'       std_norm_target = std_norm_target
 #'     )
 #'   )
 #'
@@ -187,7 +190,8 @@ mcmc_rhat <- function(draws, param) {
     dplyr::arrange(iter, .by_group = TRUE) |>
     dplyr::summarise(mean = mean(.data[[param]]), var = stats::var(.data[[param]]), n = dplyr::n(), .groups = "drop")
   if (length(unique(dsplit$n)) != 1L) cli::cli_abort("Each chain must have the same number of draws to compute R-hat.")
-  n <- dsplit$n[1]; m <- nrow(dsplit)
+  n <- dsplit$n[1]
+  m <- nrow(dsplit)
   B <- n * stats::var(dsplit$mean)
   W <- mean(dsplit$var)
   var_hat <- ((n - 1) / n) * W + (B / n)
@@ -222,7 +226,8 @@ mcmc_ess <- function(draws, param, max_lag = 100) {
     n_vec[i] <- length(xi)
     ac <- stats::acf(xi, plot = FALSE, lag.max = min(max_lag, length(xi) - 1))$acf[-1]
     # sum positive adjacent pairs
-    s <- 0; j <- 1
+    s <- 0
+    j <- 1
     while (j < length(ac)) {
       pair_sum <- ac[j] + ac[j + 1]
       if (pair_sum < 0) break
@@ -237,3 +242,79 @@ mcmc_ess <- function(draws, param, max_lag = 100) {
   as.numeric(ess)
 }
 
+
+
+#' Finite-difference numeric gradient for a target function
+#'
+#' Computes the central-difference gradient of the negative log-posterior U
+#' returned by a target function. The target must return a tibble with column
+#' `neg_log_prob` for the given parameter vector.
+#'
+#' @param target_fn Function of the form `function(data, params, ...)` returning a
+#'   tibble with `neg_log_prob` for the provided parameter vector.
+#' @param data Data passed through to `target_fn`.
+#' @param params Numeric vector of parameters.
+#' @param eps Step size for finite differences (default 1e-6).
+#' @param ... Additional arguments passed to `target_fn`.
+#' @return Numeric vector of length equal to `params`, giving dU/dparams.
+#' @examples
+#' std_norm_target <- function(data, params) {
+#'   x <- params[1]
+#'   tibble::tibble(param1 = x, neg_log_prob = 0.5 * x^2)
+#' }
+#' numeric_grad(std_norm_target, data = NULL, params = 0)
+#' @seealso [metropolis_sampler()]
+#' @family mcmc
+#' @export
+numeric_grad <- function(target_fn, data, params, eps = 1e-6, ...) {
+  if (!is.function(target_fn)) cli::cli_abort("`target_fn` must be a function like function(data, params, ...) returning a tibble with `neg_log_prob`.")
+  if (!is.numeric(params)) cli::cli_abort("`params` must be a numeric vector.")
+  p <- length(params)
+  g <- numeric(p)
+  fU <- function(q) as.numeric(target_fn(data = data, params = q, ...)$neg_log_prob)
+  for (i in seq_len(p)) {
+    e <- rep(0, p)
+    e[i] <- eps
+    g[i] <- (fU(params + e) - fU(params - e)) / (2 * eps)
+  }
+  if (!is.null(names(params))) names(g) <- names(params) else names(g) <- paste0("param", seq_len(p))
+  g
+}
+
+#' Single Metropolis random-walk step
+#'
+#' Proposes a new parameter vector from a Gaussian random walk and accepts it
+#' with probability min(1, exp(logp_prop - logp_curr)). Returns the new state.
+#'
+#' @inheritParams metropolis_sampler
+#' @param current Numeric vector of current parameter values.
+#' @return A list with elements: `state` (numeric vector), `accept` (0/1), and
+#'   `log_prob` (log probability at `state`).
+#' @examples
+#' std_norm_target <- function(data, params) {
+#'   x <- params[1]
+#'   tibble::tibble(param1 = x, neg_log_prob = 0.5 * x^2)
+#' }
+#' step1 <- metropolis_step(std_norm_target, data = NULL, current = 0, step = 1)
+#' @seealso [metropolis_sampler()]
+#' @family mcmc
+#' @export
+metropolis_step <- function(target_fn, data, current, step, ...) {
+  if (!is.function(target_fn)) cli::cli_abort("`target_fn` must be a function like function(data, params, ...) returning a tibble with `neg_log_prob`.")
+  if (!is.numeric(current)) cli::cli_abort("`current` must be a numeric vector.")
+  d <- length(current)
+  if (length(step) == 1L) step <- rep(step, d)
+  if (length(step) != d) cli::cli_abort("`step` must be length 1 or length equal to number of parameters ({d}).")
+  eval_target <- function(q) as.numeric(target_fn(data = data, params = q, ...)$neg_log_prob)
+  U_curr <- eval_target(current)
+  logp_curr <- -U_curr
+  prop <- current + stats::rnorm(d, 0, step)
+  U_prop <- eval_target(prop)
+  logp_prop <- -U_prop
+  acc <- as.integer(exp(logp_prop - logp_curr) > stats::runif(1))
+  if (acc == 1L) {
+    list(state = prop, accept = 1L, log_prob = logp_prop)
+  } else {
+    list(state = current, accept = 0L, log_prob = logp_curr)
+  }
+}
