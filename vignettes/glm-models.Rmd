@@ -1,0 +1,512 @@
+---
+title: "Generalized Linear Models"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Generalized Linear Models}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 7,
+  fig.height = 5
+)
+```
+
+## Introduction
+
+This vignette covers generalized linear models (GLMs) for non-normal outcomes:
+
+- **Binomial models**: Binary and count/trial data
+- **Poisson models**: Count data
+- **Zero-inflated models**: Excess zeros
+
+```{r setup}
+library(tidyrethinking)
+library(dplyr)
+library(ggplot2)
+library(tidyr)
+```
+
+## Binomial Models
+
+### Logit Link Function
+
+The logit link maps probabilities to the real line:
+
+```{r logit}
+# Probability to log-odds
+probs <- seq(0.01, 0.99, by = 0.01)
+log_odds <- logit(probs)
+
+tibble(prob = probs, log_odds = log_odds) %>%
+  ggplot(aes(x = prob, y = log_odds)) +
+  geom_line(color = "steelblue", linewidth = 1) +
+  geom_hline(yintercept = 0, linetype = "dashed", color = "grey50") +
+  labs(
+    x = "Probability",
+    y = "Log-odds",
+    title = "Logit Link Function"
+  ) +
+  theme_rethinking()
+
+# Log-odds to probability
+log_odds_seq <- seq(-4, 4, by = 0.1)
+probs_back <- inv_logit(log_odds_seq)
+
+tibble(log_odds = log_odds_seq, prob = probs_back) %>%
+  ggplot(aes(x = log_odds, y = prob)) +
+  geom_line(color = "coral", linewidth = 1) +
+  geom_hline(yintercept = 0.5, linetype = "dashed", color = "grey50") +
+  labs(
+    x = "Log-odds",
+    y = "Probability",
+    title = "Inverse Logit (Logistic) Function"
+  ) +
+  theme_rethinking()
+```
+
+### Simulating Binomial Data
+
+```{r binomial-sim}
+# Single predictor
+set.seed(42)
+binom_data <- simulate_binomial_data(
+  n = 200,
+  intercept = -1,    # log-odds at x = 0
+  slopes = 0.8,      # effect on log-odds scale
+  seed = 42
+)
+
+head(binom_data)
+
+# Visualize
+ggplot(binom_data, aes(x = x_1, y = y)) +
+  geom_point(alpha = 0.4, size = 2) +
+  geom_smooth(method = "glm", method.args = list(family = "binomial"),
+              color = "steelblue", linewidth = 1) +
+  labs(
+    x = "Predictor",
+    y = "Binary outcome",
+    title = "Simulated Binomial Data"
+  ) +
+  theme_rethinking()
+```
+
+### Grid Approximation for Posterior
+
+```{r binomial-grid}
+# Simple example: 6 successes in 9 trials
+posterior_samples <- sample_binomial_posterior(
+  y = 6,
+  n = 9,
+  x_matrix = matrix(1, nrow = 1),  # Intercept only
+  n_samples = 1000,
+  seed = 42
+)
+
+# Convert to probability scale
+posterior_samples <- posterior_samples %>%
+  mutate(prob = inv_logit(intercept))
+
+# Visualize posterior
+ggplot(posterior_samples, aes(x = prob)) +
+  geom_histogram(aes(y = ..density..), bins = 30, 
+                 fill = "steelblue", alpha = 0.7) +
+  geom_vline(xintercept = 6/9, color = "red", 
+             linetype = "dashed", linewidth = 1) +
+  labs(
+    x = "Probability of success",
+    y = "Posterior density",
+    title = "Posterior Distribution (6/9 successes)",
+    subtitle = "Red line = observed proportion"
+  ) +
+  theme_rethinking()
+```
+
+### Credible Intervals
+
+```{r binomial-interval}
+intervals <- compute_binomial_intervals(
+  posterior_samples$intercept,
+  probs = c(0.50, 0.89, 0.95)
+)
+
+intervals
+```
+
+### Effect Sizes: Log-Odds Ratio
+
+```{r binomial-or}
+# Simulate data with two predictors
+multi_data <- simulate_binomial_data(
+  n = 500,
+  intercept = -0.5,
+  slopes = c(0.7, -0.4),
+  seed = 42
+)
+
+# Fit model
+fit <- glm(y ~ x_1 + x_2, data = multi_data, family = binomial())
+
+# Log-odds ratios
+coef(fit)
+
+# Convert to odds ratios (exponentiate)
+exp(coef(fit))
+
+# Interpretation: 
+# - exp(β) > 1: predictor increases odds
+# - exp(β) < 1: predictor decreases odds
+# - exp(β) = 1: no effect
+
+# Compare to simulation truth
+compute_log_odds_ratio(
+  p_baseline = inv_logit(-0.5),
+  p_treatment = inv_logit(-0.5 + 0.7)
+)
+```
+
+### Visualizing Predictions
+
+```{r binomial-predict}
+# Create prediction grid
+pred_grid <- expand_grid(
+  x_1 = seq(min(multi_data$x_1), max(multi_data$x_1), length.out = 50),
+  x_2 = quantile(multi_data$x_2, c(0.25, 0.5, 0.75))
+)
+
+# Add predictions
+pred_grid$prob <- predict(fit, newdata = pred_grid, type = "response")
+
+# Plot
+ggplot(pred_grid, aes(x = x_1, y = prob, color = factor(x_2))) +
+  geom_line(linewidth = 1) +
+  geom_point(data = multi_data, aes(y = y, color = NULL), 
+             alpha = 0.2, inherit.aes = TRUE) +
+  scale_color_viridis_d(option = "plasma") +
+  labs(
+    x = "Predictor 1",
+    y = "Probability of success",
+    color = "Predictor 2",
+    title = "Predicted Probabilities from Binomial Model"
+  ) +
+  theme_rethinking()
+```
+
+## Poisson Models
+
+### Log Link Function
+
+The log link ensures positive predictions for counts:
+
+```{r poisson-link}
+# Linear predictor to expected count
+linear_pred <- seq(-2, 3, by = 0.1)
+expected_count <- exp(linear_pred)
+
+tibble(linear_pred, expected_count) %>%
+  ggplot(aes(x = linear_pred, y = expected_count)) +
+  geom_line(color = "darkgreen", linewidth = 1) +
+  labs(
+    x = "Linear predictor (log scale)",
+    y = "Expected count",
+    title = "Exponential (Inverse Log) Link Function"
+  ) +
+  theme_rethinking()
+```
+
+### Simulating Poisson Data
+
+```{r poisson-sim}
+poisson_data <- simulate_poisson_data(
+  n = 300,
+  intercept = 1.5,      # log(count) at x = 0
+  slopes = c(0.3, -0.2),
+  seed = 42
+)
+
+head(poisson_data)
+
+# Visualize
+ggplot(poisson_data, aes(x = x_1, y = y)) +
+  geom_point(alpha = 0.4, size = 2) +
+  geom_smooth(method = "glm", method.args = list(family = "poisson"),
+              color = "darkgreen", linewidth = 1) +
+  labs(
+    x = "Predictor",
+    y = "Count",
+    title = "Simulated Poisson Data"
+  ) +
+  theme_rethinking()
+```
+
+### Rate Ratios
+
+```{r poisson-rate}
+# Fit model
+pois_fit <- glm(y ~ x_1 + x_2, data = poisson_data, family = poisson())
+
+# Coefficients are on log scale
+coef(pois_fit)
+
+# Convert to rate ratios
+rate_ratios <- compute_rate_ratio(coef(pois_fit)[-1])  # Exclude intercept
+rate_ratios
+
+# Interpretation:
+# - Rate ratio > 1: predictor increases count
+# - Rate ratio < 1: predictor decreases count
+# - Rate ratio = 1: no effect
+```
+
+### Overdispersion
+
+Poisson models assume mean = variance. Real data often have extra variance:
+
+```{r poisson-dispersion}
+# Check for overdispersion
+tibble(
+  Parameter = c("Residual deviance", "df", "Dispersion"),
+  Value = c(
+    deviance(pois_fit),
+    df.residual(pois_fit),
+    deviance(pois_fit) / df.residual(pois_fit)
+  )
+)
+
+# Dispersion ≈ 1: good fit
+# Dispersion > 1: overdispersion (consider negative binomial)
+# Dispersion < 1: underdispersion (rare)
+```
+
+## Zero-Inflated Poisson
+
+### Understanding Excess Zeros
+
+Many count datasets have more zeros than Poisson predicts:
+
+```{r zip-concept}
+# Compare Poisson to ZIP
+n_sim <- 1000
+lambda <- 2
+zero_prob <- 0.3
+
+# Standard Poisson
+pois_counts <- rpois(n_sim, lambda)
+
+# Zero-inflated Poisson
+zip_data <- simulate_zero_inflated_poisson(
+  n = n_sim,
+  intercept = log(lambda),
+  slopes = NULL,
+  zero_prob = zero_prob,
+  seed = 42
+)
+
+# Compare distributions
+compare_df <- tibble(
+  count = 0:10,
+  Poisson = dpois(0:10, lambda),
+  ZIP = sapply(0:10, function(k) {
+    ifelse(k == 0, 
+           zero_prob + (1 - zero_prob) * dpois(0, lambda),
+           (1 - zero_prob) * dpois(k, lambda))
+  })
+) %>%
+  pivot_longer(-count, names_to = "Model", values_to = "Probability")
+
+ggplot(compare_df, aes(x = count, y = Probability, fill = Model)) +
+  geom_col(position = "dodge", alpha = 0.7) +
+  scale_fill_manual(values = c("Poisson" = "steelblue", "ZIP" = "coral")) +
+  labs(
+    x = "Count",
+    y = "Probability",
+    title = "Zero-Inflated Poisson vs Standard Poisson",
+    subtitle = sprintf("λ = %.1f, P(structural zero) = %.1f", lambda, zero_prob)
+  ) +
+  theme_rethinking()
+```
+
+### Simulating ZIP Data
+
+```{r zip-sim}
+# Simulate data with predictors
+zip_full <- simulate_zero_inflated_poisson(
+  n = 500,
+  intercept = 1.0,
+  slopes = c(0.5, -0.3),
+  zero_prob = 0.4,
+  seed = 42
+)
+
+# Check proportion of zeros
+mean(zip_full$y == 0)  # ~40% zeros
+mean(rpois(500, exp(1.0)) == 0)  # Poisson would predict ~37% zeros
+```
+
+### Two-Part Models
+
+ZIP models have two parts:
+1. **Zero-inflation**: Logistic model for structural zeros
+2. **Count model**: Poisson for non-structural counts
+
+```{r zip-interpret}
+# In practice, use packages like pscl or brms for ZIP
+# Here we show the intuition
+
+# Part 1: Which observations are structural zeros?
+zip_full <- zip_full %>%
+  mutate(
+    structural_zero = y == 0 & runif(n()) < 0.4,
+    count_process = ifelse(structural_zero, NA, y)
+  )
+
+# Visualize two processes
+ggplot(zip_full, aes(x = x_1, y = y, color = structural_zero)) +
+  geom_point(alpha = 0.5, size = 2) +
+  scale_color_manual(
+    values = c("FALSE" = "darkgreen", "TRUE" = "grey70"),
+    labels = c("Count process", "Structural zero")
+  ) +
+  labs(
+    x = "Predictor",
+    y = "Count",
+    color = "Type",
+    title = "Zero-Inflated Poisson Data",
+    subtitle = "Two different sources of zeros"
+  ) +
+  theme_rethinking()
+```
+
+## Model Comparison
+
+### When to Use Each Model
+
+```{r model-comparison}
+tibble(
+  Outcome = c("Binary", "Count (0-n)", "Count with trials", 
+              "Count (rare)", "Count (excess zeros)"),
+  Model = c("Binomial (logit)", "Poisson", "Binomial", 
+            "Poisson", "Zero-inflated Poisson"),
+  Link = c("logit", "log", "logit", "log", "logit + log"),
+  Example = c(
+    "Survived (yes/no)",
+    "Number of events",
+    "Successes out of trials",
+    "Disease cases per year",
+    "Fish caught (many zeros)"
+  )
+) %>%
+  knitr::kable()
+```
+
+### Simulating from Different Models
+
+```{r model-compare-sim}
+set.seed(42)
+n <- 200
+x <- rnorm(n)
+
+# Different data generating processes
+comparison_data <- tibble(
+  x = x,
+  Binary = rbinom(n, 1, prob = inv_logit(-0.5 + 0.8 * x)),
+  Binomial = rbinom(n, 10, prob = inv_logit(-0.5 + 0.8 * x)),
+  Poisson = rpois(n, lambda = exp(1 + 0.5 * x)),
+  ZIP = simulate_zero_inflated_poisson(
+    n, intercept = 1, slopes = 0.5, zero_prob = 0.3
+  )$y
+)
+
+# Visualize distributions
+comparison_long <- comparison_data %>%
+  pivot_longer(-x, names_to = "Model", values_to = "y")
+
+ggplot(comparison_long, aes(x = y)) +
+  geom_histogram(binwidth = 1, fill = "steelblue", alpha = 0.7) +
+  facet_wrap(~Model, scales = "free") +
+  labs(
+    x = "Outcome value",
+    y = "Count",
+    title = "Different GLM Outcome Distributions"
+  ) +
+  theme_rethinking()
+```
+
+## Practical Tips
+
+### 1. Check Your Scale
+
+```{r tips-scale}
+# Probabilities: use logit link
+# Counts: use log link
+# Always check that predictions make sense
+
+# Bad: predicting negative probabilities
+# Good: predictions bounded between 0 and 1
+
+# Bad: predicting negative counts
+# Good: predictions always positive
+```
+
+### 2. Interpret on Natural Scale
+
+```{r tips-interpret}
+# Coefficients are on link scale
+# Transform for interpretation
+
+# Binomial: exp(β) = odds ratio
+beta_logit <- 0.5
+sprintf("1 unit increase multiplies odds by %.2f", exp(beta_logit))
+
+# Poisson: exp(β) = rate ratio
+beta_log <- 0.3
+sprintf("1 unit increase multiplies count by %.2f", exp(beta_log))
+```
+
+### 3. Use Prior Predictive Checks
+
+```{r tips-prior, eval=FALSE}
+# Simulate from your priors before fitting
+prior_samples <- generate_prior_predictive_linear(
+  x = your_predictors,
+  intercept_mean = 0,
+  intercept_sd = 1.5,  # On log-odds scale
+  slope_mean = 0,
+  slope_sd = 1,
+  sigma = 0  # No residual for binomial
+)
+
+# Do predictions look reasonable?
+# Are they in the right range?
+```
+
+### 4. Check Predictions
+
+```{r tips-check, eval=FALSE}
+# Posterior predictive checks
+fitted_values <- predict(model, type = "response")
+
+# Compare observed to expected
+tibble(observed = y, fitted = fitted_values) %>%
+  ggplot(aes(x = fitted, y = observed)) +
+  geom_point(alpha = 0.3) +
+  geom_abline(intercept = 0, slope = 1, linetype = "dashed")
+```
+
+## Resources
+
+- McElreath, R. (2020). *Statistical Rethinking*, Chapters 9-11
+- Gelman & Hill (2007). *Data Analysis Using Regression and Multilevel/Hierarchical Models*
+- **brms** for Bayesian GLMs: <https://paul-buerkner.github.io/brms/>
+- **pscl** for zero-inflated models: <https://github.com/atahk/pscl>
+
+## Next Steps
+
+- See `vignette("bayesian-workflow")` for fitting GLMs with brms
+- See `vignette("multilevel-models")` for nested and crossed structures
+- See `vignette("advanced-topics")` for robust regression and measurement error

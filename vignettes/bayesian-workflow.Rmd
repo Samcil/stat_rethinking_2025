@@ -1,0 +1,462 @@
+---
+title: "Bayesian Workflow with tidyrethinking and brms"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{Bayesian Workflow with tidyrethinking and brms}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  fig.width = 7,
+  fig.height = 5,
+  eval = FALSE  # Set to TRUE if brms/cmdstan installed
+)
+```
+
+## Introduction
+
+This vignette demonstrates how to integrate **tidyrethinking** with modern Bayesian modeling packages for a complete workflow:
+
+- **brms**: Full Bayesian regression models using Stan
+- **tidybayes**: Extract and visualize posterior draws
+- **ggdist**: Enhanced visualizations of distributions
+- **bayesplot**: MCMC diagnostics and posterior checks
+- **posterior**: Work with posterior distributions
+
+## Setup
+
+```{r setup}
+library(tidyrethinking)
+library(dplyr)
+library(ggplot2)
+
+# Bayesian ecosystem (install separately)
+library(brms)
+library(tidybayes)
+library(ggdist)
+library(bayesplot)
+library(posterior)
+```
+
+## Example: Multilevel Model with brms
+
+### Simulate Data
+
+Use tidyrethinking to generate realistic multilevel data:
+
+```{r simulate}
+# Simulate varying intercepts data
+set.seed(42)
+ml_data <- simulate_varying_intercepts(
+  n_groups = 20,
+  n_per_group = 10,
+  grand_intercept = 5,
+  between_group_sd = 2,
+  within_group_sd = 1,
+  seed = 42
+)
+
+head(ml_data)
+```
+
+### Fit Model with brms
+
+```{r fit-brms}
+# Fit multilevel model
+fit <- brm(
+  y ~ 1 + (1 | group),
+  data = ml_data,
+  family = gaussian(),
+  prior = c(
+    prior(normal(0, 10), class = Intercept),
+    prior(exponential(1), class = sd),
+    prior(exponential(1), class = sigma)
+  ),
+  iter = 2000,
+  warmup = 1000,
+  chains = 4,
+  cores = 4,
+  seed = 42
+)
+
+summary(fit)
+```
+
+### Extract Posterior with tidybayes
+
+```{r tidybayes}
+# Extract posterior draws in tidy format
+posterior_draws <- fit %>%
+  spread_draws(b_Intercept, sigma, sd_group__Intercept)
+
+head(posterior_draws)
+
+# Extract group-specific intercepts
+group_effects <- fit %>%
+  spread_draws(r_group[group, term])
+
+head(group_effects)
+```
+
+### Visualize with ggdist
+
+```{r ggdist-viz}
+# Plot posterior distributions
+posterior_draws %>%
+  ggplot(aes(x = sd_group__Intercept)) +
+  stat_halfeye(
+    .width = c(0.66, 0.95),
+    fill = "skyblue"
+  ) +
+  labs(
+    x = "Between-group SD",
+    y = "Density",
+    title = "Posterior Distribution of Group Variability"
+  ) +
+  theme_rethinking()
+
+# Compare observed vs fitted group means
+group_means <- ml_data %>%
+  group_by(group) %>%
+  summarise(observed = mean(y))
+
+group_effects %>%
+  mutate(fitted = b_Intercept + r_group) %>%
+  median_qi(.width = 0.89) %>%
+  left_join(group_means, by = "group") %>%
+  ggplot(aes(y = group)) +
+  geom_interval(aes(xmin = .lower, xmax = .upper)) +
+  geom_point(aes(x = fitted), size = 2) +
+  geom_point(aes(x = observed), color = "red", shape = 4, size = 3) +
+  labs(
+    x = "Group mean",
+    y = "Group",
+    title = "Fitted vs Observed Group Means",
+    subtitle = "Red X = observed, black = posterior median with 89% CI"
+  ) +
+  theme_rethinking()
+```
+
+### MCMC Diagnostics with bayesplot
+
+```{r diagnostics}
+# Trace plots
+mcmc_trace(fit, pars = c("b_Intercept", "sigma", "sd_group__Intercept"))
+
+# Pairs plot
+mcmc_pairs(fit, pars = c("b_Intercept", "sigma", "sd_group__Intercept"))
+
+# R-hat convergence diagnostic
+rhat_values <- rhat(fit)
+mcmc_rhat(rhat_values)
+
+# Effective sample size
+neff_values <- neff_ratio(fit)
+mcmc_neff(neff_values)
+```
+
+### Posterior Predictive Checks
+
+```{r pp-check}
+# Compare observed to replicated data
+pp_check(fit, type = "dens_overlay", ndraws = 50)
+pp_check(fit, type = "stat", stat = "mean")
+pp_check(fit, type = "stat_grouped", stat = "mean", group = "group")
+```
+
+### Shrinkage Analysis
+
+Combine tidyrethinking utilities with brms output:
+
+```{r shrinkage}
+# Compute observed group statistics
+group_stats <- ml_data %>%
+  group_by(group) %>%
+  summarise(
+    mean_y = mean(y),
+    n = n()
+  )
+
+# Extract between and within variance from fit
+between_sd <- mean(posterior_draws$sd_group__Intercept)
+within_sd <- mean(posterior_draws$sigma)
+
+# Use tidyrethinking to compute shrinkage
+shrinkage_data <- compute_shrinkage(
+  group_means = group_stats$mean_y,
+  group_ns = group_stats$n,
+  within_sd = within_sd,
+  between_sd = between_sd,
+  grand_mean = mean(posterior_draws$b_Intercept)
+)
+
+# Visualize shrinkage
+ggplot(shrinkage_data, aes(x = observed_mean, y = shrunken_mean)) +
+  geom_abline(intercept = 0, slope = 1, linetype = "dashed", color = "grey50") +
+  geom_point(aes(size = n, color = shrinkage_factor), alpha = 0.7) +
+  scale_color_viridis_c(option = "plasma") +
+  scale_size_continuous(range = c(2, 6)) +
+  labs(
+    x = "Observed group mean",
+    y = "Shrunken estimate (partial pooling)",
+    color = "Shrinkage",
+    size = "Group size",
+    title = "Partial Pooling in Multilevel Model",
+    subtitle = "Smaller groups shrink more toward grand mean"
+  ) +
+  theme_rethinking()
+```
+
+## Example: GLM with Prior Predictive Simulation
+
+### Prior Predictive with tidyrethinking
+
+```{r prior-pred}
+# Use tidyrethinking for prior predictive
+prior_samples <- generate_prior_predictive_linear(
+  x = seq(-2, 2, length.out = 100),
+  n_samples = 100,
+  intercept_mean = 0,
+  intercept_sd = 1,
+  slope_mean = 0,
+  slope_sd = 0.5,
+  sigma = 1,
+  seed = 42
+)
+
+# Visualize prior implications
+ggplot(prior_samples, aes(x = x, y = y, group = sample)) +
+  geom_line(alpha = 0.3, color = "steelblue") +
+  labs(
+    x = "Predictor",
+    y = "Outcome",
+    title = "Prior Predictive Distribution",
+    subtitle = "What the model expects before seeing data"
+  ) +
+  theme_rethinking()
+```
+
+### Fit with brms
+
+```{r glm-fit}
+# Generate observed data
+observed_data <- tibble(
+  x = rnorm(100),
+  y = 0.5 + 0.8 * x + rnorm(100, 0, 0.5)
+)
+
+# Fit with same priors
+fit_glm <- brm(
+  y ~ 1 + x,
+  data = observed_data,
+  prior = c(
+    prior(normal(0, 1), class = Intercept),
+    prior(normal(0, 0.5), class = b),
+    prior(exponential(2), class = sigma)
+  ),
+  sample_prior = "yes",  # Save prior samples
+  iter = 2000,
+  chains = 4
+)
+```
+
+### Compare Prior to Posterior with ggdist
+
+```{r prior-post}
+# Extract both prior and posterior
+draws_df <- fit_glm %>%
+  gather_draws(b_Intercept, b_x, sigma, regex = TRUE) %>%
+  mutate(source = "Posterior")
+
+prior_df <- prior_draws(fit_glm) %>%
+  select(Intercept, b, sigma) %>%
+  tidyr::pivot_longer(everything(), names_to = ".variable", values_to = ".value") %>%
+  mutate(
+    source = "Prior",
+    .chain = 1,
+    .iteration = row_number(),
+    .draw = row_number()
+  )
+
+# Combine and plot
+bind_rows(draws_df, prior_df) %>%
+  ggplot(aes(x = .value, fill = source)) +
+  stat_slab(alpha = 0.7) +
+  facet_wrap(~.variable, scales = "free") +
+  scale_fill_manual(values = c("Prior" = "grey70", "Posterior" = "steelblue")) +
+  labs(
+    x = "Parameter value",
+    y = "Density",
+    fill = "Distribution",
+    title = "Prior vs Posterior Distributions"
+  ) +
+  theme_rethinking()
+```
+
+### Posterior Predictive Lines
+
+```{r post-pred-lines}
+# Use tidyrethinking to generate prediction data
+new_x <- seq(min(observed_data$x), max(observed_data$x), length.out = 100)
+
+# Extract posterior samples
+post_samples <- as_draws_df(fit_glm) %>%
+  select(b_Intercept, b_x) %>%
+  slice_sample(n = 100)
+
+# Generate lines
+pred_lines <- generate_posterior_predictive_lines(
+  x = new_x,
+  intercepts = post_samples$b_Intercept,
+  slopes = post_samples$b_x
+)
+
+# Plot with data
+ggplot() +
+  geom_line(
+    data = pred_lines,
+    aes(x = x, y = y, group = sample),
+    alpha = 0.1,
+    color = "steelblue"
+  ) +
+  geom_point(
+    data = observed_data,
+    aes(x = x, y = y),
+    size = 2,
+    alpha = 0.6
+  ) +
+  labs(
+    x = "Predictor",
+    y = "Outcome",
+    title = "Posterior Predictive Distribution",
+    subtitle = "100 plausible regression lines"
+  ) +
+  theme_rethinking()
+```
+
+## Integrating with posterior Package
+
+```{r posterior-pkg}
+# Convert to posterior's draws format
+draws <- as_draws_rvars(fit)
+
+# Summarize
+summarise_draws(draws)
+
+# Calculate derived quantities
+draws_df <- as_draws_df(fit)
+draws_df <- draws_df %>%
+  mutate(
+    # ICC using tidyrethinking formula
+    tau_sq = sd_group__Intercept^2,
+    sigma_sq = sigma^2,
+    icc = tau_sq / (tau_sq + sigma_sq)
+  )
+
+# Visualize ICC
+ggplot(draws_df, aes(x = icc)) +
+  stat_halfeye(.width = c(0.66, 0.95)) +
+  labs(
+    x = "Intraclass Correlation (ICC)",
+    y = "Density",
+    title = "How much variance is between vs within groups?"
+  ) +
+  theme_rethinking()
+```
+
+## Best Practices
+
+### 1. Start with Simulation
+
+Always use tidyrethinking's simulation functions to:
+- Understand causal structures
+- Test your model on known data
+- Validate recovery of parameters
+
+```{r practice-sim, eval=FALSE}
+# Simulate data with known parameters
+sim_data <- simulate_confounding(
+  n = 1000,
+  effect_z_x = 1.0,
+  effect_z_y = 1.5,
+  effect_x_y = 0.5,
+  seed = 42
+)
+
+# Fit model and check if you recover true effects
+fit_test <- brm(y ~ x + z, data = sim_data)
+# Compare estimates to true values: x->y = 0.5, z->y = 1.5
+```
+
+### 2. Use Prior Predictive Checks
+
+```{r practice-prior, eval=FALSE}
+# Visualize prior implications before fitting
+prior_data <- generate_prior_predictive_linear(
+  x = your_predictor_range,
+  n_samples = 100,
+  intercept_mean = 0,
+  intercept_sd = 5,  # Adjust based on outcome scale
+  slope_mean = 0,
+  slope_sd = 1,
+  sigma = 2
+)
+# Plot and ask: "Are these plausible relationships?"
+```
+
+### 3. Diagnose with Multiple Tools
+
+Combine tidyrethinking, brms, and bayesplot:
+
+```{r practice-diagnose, eval=FALSE}
+# 1. Check R-hat with tidyrethinking
+chains <- simulate_multiple_chains(n_chains = 4, n_steps = 1000)
+compute_rhat(chains, var = "parameter")
+
+# 2. Visual diagnostics with bayesplot
+mcmc_trace(fit)
+mcmc_dens_overlay(fit)
+
+# 3. Posterior predictive checks
+pp_check(fit, ndraws = 100)
+```
+
+### 4. Communicate Uncertainty
+
+Use ggdist for publication-quality uncertainty visualization:
+
+```{r practice-viz, eval=FALSE}
+# Half-eye plots (density + interval)
+posterior %>%
+  ggplot(aes(x = parameter)) +
+  stat_halfeye(.width = c(0.66, 0.95))
+
+# Gradient interval plots
+posterior %>%
+  ggplot(aes(x = parameter)) +
+  stat_gradientinterval()
+
+# CCDF bar plots for discrete outcomes
+posterior %>%
+  ggplot(aes(x = count)) +
+  stat_ccdfinterval()
+```
+
+## Resources
+
+- **tidyrethinking**: Simulation and teaching tools
+- **brms**: <https://paul-buerkner.github.io/brms/>
+- **tidybayes**: <https://mjskay.github.io/tidybayes/>
+- **ggdist**: <https://mjskay.github.io/ggdist/>
+- **bayesplot**: <https://mc-stan.org/bayesplot/>
+- **posterior**: <https://mc-stan.org/posterior/>
+
+## Next Steps
+
+- See `vignette("causal-inference")` for DAG-based workflows
+- See `vignette("glm-models")` for binomial/Poisson models
+- See `vignette("advanced-topics")` for measurement error, GPs, networks
