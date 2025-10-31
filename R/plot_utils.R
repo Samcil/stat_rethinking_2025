@@ -52,57 +52,64 @@ lines_with_outline <- function(data = NULL, x = NULL, y = NULL,
 
 #' Draw an infinite line with an outline (abline) using ggplot2
 #'
-#' Returns a ggplot object containing a reference line layer (abline, hline or
-#' vline) with an outline for improved contrast. If `data` is supplied and
-#' contains `x` and `y` columns, the plot limits are derived from that data;
-#' otherwise provide `xlim`/`ylim`.
+#' Returns a list of ggplot layers containing a reference line (abline, hline or
+#' vline) with an outline for improved contrast. Can be added to an existing
+#' ggplot object. If `xlim`/`ylim` need to be set, use `+ coord_cartesian()`.
 #'
-#' @param data Optional data frame/tibble with `x` and `y` columns to infer limits.
 #' @param a Intercept for `geom_abline()` (used with `b`).
 #' @param b Slope for `geom_abline()` (used with `a`).
 #' @param h y-intercept(s) for horizontal lines.
 #' @param v x-intercept(s) for vertical lines.
-#' @param xlim Numeric length-2 giving x-axis limits (when `data` is NULL).
-#' @param ylim Numeric length-2 giving y-axis limits (when `data` is NULL).
 #' @inheritParams lines_with_outline
-#' @return A ggplot object with outline and inner reference line.
+#' @return A list of ggplot layers (outline and inner reference line) that can
+#'   be added to a ggplot object with `+`.
 #' @examples
-#' abline_with_outline(h = 0.5)
+#' library(ggplot2)
+#' ggplot() + abline_with_outline(h = 0.5)
+#' 
+#' # Combine with other geoms
+#' df <- tibble::tibble(x = c(0, 1), y = c(0, 1))
+#' lines_with_outline(df, color = "blue") +
+#'   abline_with_outline(a = 0, b = 1, color = "red")
 #' @seealso [lines_with_outline()]
 #' @family plotting
 #' @export
-#' @importFrom ggplot2 ggplot geom_abline geom_hline geom_vline coord_cartesian
-abline_with_outline <- function(data = NULL, a = NULL, b = NULL,
+#' @importFrom ggplot2 geom_abline geom_hline geom_vline
+abline_with_outline <- function(a = NULL, b = NULL,
                                 h = NULL, v = NULL,
-                                xlim = c(0, 1), ylim = c(0, 1),
                                 color = "black", size = 1,
                                 outline_color = "white", outline_expand = 2, ...) {
-  if (!is.null(data)) {
-    if (all(c("x", "y") %in% names(data))) {
-      xlim <- range(data$x, na.rm = TRUE)
-      ylim <- range(data$y, na.rm = TRUE)
-    }
-  }
-  p <- ggplot2::ggplot()
-  # Outline first
+  layers <- list()
+  
+  # Outline first (drawn below)
   if (!is.null(a) && !is.null(b)) {
-    p <- p + ggplot2::geom_abline(intercept = a, slope = b,
-                                  color = outline_color, linewidth = size * outline_expand, ...)
-    p <- p + ggplot2::geom_abline(intercept = a, slope = b,
-                                  color = color, linewidth = size, ...)
+    layers <- c(
+      layers,
+      list(ggplot2::geom_abline(intercept = a, slope = b,
+                               color = outline_color, linewidth = size * outline_expand, ...)),
+      list(ggplot2::geom_abline(intercept = a, slope = b,
+                               color = color, linewidth = size, ...))
+    )
   }
   if (!is.null(h)) {
-    p <- p + ggplot2::geom_hline(yintercept = h,
-                                 color = outline_color, linewidth = size * outline_expand, ...)
-    p <- p + ggplot2::geom_hline(yintercept = h,
-                                 color = color, linewidth = size, ...)
+    layers <- c(
+      layers,
+      list(ggplot2::geom_hline(yintercept = h,
+                              color = outline_color, linewidth = size * outline_expand, ...)),
+      list(ggplot2::geom_hline(yintercept = h,
+                              color = color, linewidth = size, ...))
+    )
   }
   if (!is.null(v)) {
-    p <- p + ggplot2::geom_vline(xintercept = v,
-                                 color = outline_color, linewidth = size * outline_expand, ...)
-    p <- p + ggplot2::geom_vline(xintercept = v,
-                                 color = color, linewidth = size, ...)
+    layers <- c(
+      layers,
+      list(ggplot2::geom_vline(xintercept = v,
+                              color = outline_color, linewidth = size * outline_expand, ...)),
+      list(ggplot2::geom_vline(xintercept = v,
+                              color = color, linewidth = size, ...))
+    )
   }
-  p + ggplot2::coord_cartesian(xlim = xlim, ylim = ylim)
+  
+  layers
 }
 

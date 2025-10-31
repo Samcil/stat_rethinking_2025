@@ -24,8 +24,8 @@ library(ggplot2)
 ## 1. Circles and wedges
 
 ```{r}
-circ <- circle_points(center = c(0, 0), r = 1, n = 200)
-wed  <- wedge_polygon(center = c(0, 0), r = 1, theta_start = 0, theta_end = pi/3, n = 50)
+circ <- circle_points(origin = c(0, 0), r = 1, n = 200)
+wed  <- wedge_polygon(origin = c(0, 0), r = 1, theta_start = 0, theta_end = pi/3, n = 50)
 
 p <- ggplot() +
   geom_polygon(data = wed, aes(x, y), fill = "gold", color = NA, alpha = 0.6) +
@@ -39,8 +39,9 @@ p
 
 ```{r}
 df <- tibble::tibble(x = c(0, 1), y = c(0, 1))
-lines_with_outline(df, outline_color = "white", line_color = "black", linewidth = 1.2, outline_width = 0.8) +
-  abline_with_outline(a = 0.2, b = 0.8, xlim = c(0, 1), color = "red", outline_color = "white") +
-  theme_minimal() + labs(title = "Outlined line and abline")
+lines_with_outline(df, outline_color = "white", color = "black", size = 1.2) +
+  abline_with_outline(a = 0.2, b = 0.8, color = "red", outline_color = "white") +
+  ggplot2::theme_minimal() + 
+  ggplot2::labs(title = "Outlined line and abline")
 ```
 
