@@ -38,4 +38,4 @@ Suggests:
     knitr
 Roxygen: list(markdown = TRUE, roclets = c("rd", "namespace", "collate"))
 VignetteBuilder: quarto
-
+RoxygenNote: 7.3.2
